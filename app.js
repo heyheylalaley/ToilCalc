@@ -656,18 +656,19 @@ function renderUsersList() {
       
       container.querySelectorAll('.user-card').forEach(c => c.classList.remove('selected'));
       
+      // Re-apply search filter if any
+      const searchInput = document.getElementById('adminSearchInput');
+      const searchTerm = searchInput ? searchInput.value : '';
+      
       if (!isSelected) {
         card.classList.add('selected');
         const userName = currentUsers.find(u => u.email === email)?.name || email;
         document.getElementById('historyTitle').textContent = `History: ${userName}`;
+        filterAdminLogs(searchTerm, email);
       } else {
         document.getElementById('historyTitle').textContent = 'All Records';
+        filterAdminLogs(searchTerm, null);
       }
-      
-      // Re-apply search filter if any
-      const searchInput = document.getElementById('adminSearchInput');
-      const searchTerm = searchInput ? searchInput.value : '';
-      filterAdminLogs(searchTerm, email);
     });
   });
 }
@@ -774,13 +775,18 @@ async function handleAdminAddLog(e) {
   const form = e.target;
   const type = form.querySelector('.type-btn.active').dataset.type;
   const userEmailInput = document.getElementById('adminLogUserEmail');
-  const userEmail = userEmailInput?.value || currentUser.email;
+  const userEmail = userEmailInput?.value || '';
   const date = document.getElementById('adminLogDate').value;
   const hours = parseFloat(document.getElementById('adminLogHours').value);
   const comment = document.getElementById('adminLogComment').value;
   const approvedBy = type === 'timeoff' ? (document.getElementById('adminLogApprovedBy')?.value || '') : '';
   
   // Validation
+  if (!userEmail || userEmail.trim() === '') {
+    showToast('Пожалуйста, выберите сотрудника', 'warning');
+    return;
+  }
+  
   if (!date) {
     showToast('Пожалуйста, выберите дату', 'warning');
     return;
