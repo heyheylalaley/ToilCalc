@@ -25,6 +25,7 @@ let currentMultiplier = 1.5;
 let deleteLogId = null; // For delete modal
 let filteredLogs = []; // For search functionality
 let currentDateFilter = 'all'; // Current date filter (all, today, week, month)
+let sortOrder = 'desc'; // Sort order: 'desc' (newest first) or 'asc' (oldest first)
 
 // Флаги для предотвращения множественных вызовов
 let isCheckingSession = false; // Флаг проверки сессии
@@ -1420,6 +1421,22 @@ function filterUserLogs() {
   renderUserLogs();
 }
 
+// Update sort button UI
+function updateSortButton(view) {
+  const icon = document.getElementById(`${view}SortIcon`);
+  const text = document.getElementById(`${view}SortText`);
+  
+  if (icon && text) {
+    if (sortOrder === 'desc') {
+      icon.textContent = '⬇️';
+      text.textContent = 'Newest First';
+    } else {
+      icon.textContent = '⬆️';
+      text.textContent = 'Oldest First';
+    }
+  }
+}
+
 function renderUserLogs() {
   const container = document.getElementById('userLogs');
   
@@ -1444,11 +1461,15 @@ function renderUserLogs() {
     return;
   }
   
-  // Sort by date (newest first) - handle ISO format dates
+  // Sort by date - handle ISO format dates
   const sortedLogs = [...filteredLogs].sort((a, b) => {
     const dateA = new Date(a.date);
     const dateB = new Date(b.date);
-    return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+    if (sortOrder === 'asc') {
+      return dateA.getTime() - dateB.getTime(); // Ascending order (oldest first)
+    } else {
+      return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+    }
   });
   
   // Use documentFragment for better performance with smooth fade-in
@@ -1627,11 +1648,15 @@ function renderAdminLogs() {
   
   let logsToShow = filteredLogs;
   
-  // Sort by date (newest first) - handle ISO format dates
+  // Sort by date - handle ISO format dates
   logsToShow = [...logsToShow].sort((a, b) => {
     const dateA = new Date(a.date);
     const dateB = new Date(b.date);
-    return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+    if (sortOrder === 'asc') {
+      return dateA.getTime() - dateB.getTime(); // Ascending order (oldest first)
+    } else {
+      return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+    }
   });
   
   if (logsToShow.length === 0) {
@@ -1711,13 +1736,7 @@ async function handleAddLog(e) {
     return;
   }
   
-  const dateObj = new Date(date);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (dateObj > today) {
-    showToast('Cannot select future date', 'warning');
-    return;
-  }
+  // Allow future dates - removed restriction
   
   if (!hours || hours <= 0) {
     showToast('Please enter a valid number of hours (minimum 0.25)', 'warning');
@@ -1749,13 +1768,7 @@ async function handleAdminAddLog(e) {
     return;
   }
   
-  const dateObj = new Date(date);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (dateObj > today) {
-    showToast('Cannot select future date', 'warning');
-    return;
-  }
+  // Allow future dates - removed restriction
   
   if (!hours || hours <= 0) {
     showToast('Please enter a valid number of hours (minimum 0.25)', 'warning');

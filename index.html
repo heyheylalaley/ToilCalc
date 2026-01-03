@@ -198,11 +198,16 @@
               <input type="text" id="userSearchInput" class="search-input" placeholder="Search by comments...">
             </div>
           </div>
-          <div class="date-filters" id="userDateFilters">
-            <button class="date-filter-btn" data-filter="all">All</button>
-            <button class="date-filter-btn" data-filter="today">Today</button>
-            <button class="date-filter-btn" data-filter="week">This Week</button>
-            <button class="date-filter-btn" data-filter="month">This Month</button>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap;">
+            <div class="date-filters" id="userDateFilters">
+              <button class="date-filter-btn" data-filter="all">All</button>
+              <button class="date-filter-btn" data-filter="today">Today</button>
+              <button class="date-filter-btn" data-filter="week">This Week</button>
+              <button class="date-filter-btn" data-filter="month">This Month</button>
+            </div>
+            <button id="userSortToggle" class="btn btn-secondary btn-small" title="Toggle sort order">
+              <span id="userSortIcon">⬇️</span> <span id="userSortText">Newest First</span>
+            </button>
           </div>
           <div id="userLogs" class="logs-list"></div>
         </div>
@@ -299,11 +304,16 @@
           <h2 class="card-title">
             <span>📋</span> <span id="historyTitle">All Records</span>
           </h2>
-          <div class="date-filters" id="adminDateFilters">
-            <button class="date-filter-btn active" data-filter="all">All</button>
-            <button class="date-filter-btn" data-filter="today">Today</button>
-            <button class="date-filter-btn" data-filter="week">This Week</button>
-            <button class="date-filter-btn" data-filter="month">This Month</button>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap;">
+            <div class="date-filters" id="adminDateFilters">
+              <button class="date-filter-btn active" data-filter="all">All</button>
+              <button class="date-filter-btn" data-filter="today">Today</button>
+              <button class="date-filter-btn" data-filter="week">This Week</button>
+              <button class="date-filter-btn" data-filter="month">This Month</button>
+            </div>
+            <button id="adminSortToggle" class="btn btn-secondary btn-small" title="Toggle sort order">
+              <span id="adminSortIcon">⬇️</span> <span id="adminSortText">Newest First</span>
+            </button>
           </div>
           <div id="adminLogs" class="logs-table-container">
             <table class="logs-table">
