@@ -236,21 +236,54 @@ async function checkSupabaseSession() {
   
   if (!supabaseClient) {
     console.error('Supabase client not initialized');
-    // Try to restore from localStorage
-    await restoreUserFromStorage();
     return;
   }
   
   isCheckingSession = true;
   
   try {
-    // Check existing session (Supabase automatically restores from localStorage)
+    // First, try to restore from localStorage immediately (fastest path)
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed.email && parsed.id) {
+          // Verify session is still valid
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if (session && session.user.email.toLowerCase() === parsed.email.toLowerCase()) {
+            currentUser = parsed;
+            showMainApp();
+            loadData();
+            console.log('Quick restore from localStorage');
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+    
+    // If localStorage didn't work, check Supabase session
     const { data: { session }, error } = await supabaseClient.auth.getSession();
     
     if (session && !error) {
-      console.log('Session found, loading user data...');
-      // Get user information from users table
-      const userData = await findUserByEmail(session.user.email, 3, 200);
+      console.log('Session found for:', session.user.email);
+      
+      // First try localStorage (fastest)
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          if (parsed.email?.toLowerCase() === session.user.email.toLowerCase() && parsed.id) {
+            currentUser = parsed;
+            showMainApp();
+            loadData();
+            console.log('User restored from localStorage');
+            return;
+          }
+        } catch (e) {}
+      }
+      
+      // Fallback: get from database
+      const userData = await findUserByEmail(session.user.email);
       
       if (userData) {
         currentUser = {
@@ -262,96 +295,20 @@ async function checkSupabaseSession() {
         localStorage.setItem('user', JSON.stringify(currentUser));
         showMainApp();
         loadData();
-        console.log('User restored from session:', currentUser.email);
+        console.log('User restored from database');
       } else {
-        console.warn('Session exists but user not found in database');
-        // Try to restore from localStorage as fallback
-        await restoreUserFromStorage();
+        console.warn('Session exists but user not found - clearing session');
+        localStorage.removeItem('user');
       }
     } else {
-      // No active session, try to restore from localStorage
-      console.log('No active session, trying to restore from storage...');
-      await restoreUserFromStorage();
+      console.log('No active session');
+      localStorage.removeItem('user');
     }
     
-    // Handle OAuth callback (if hash in URL with token)
-    // Supabase automatically processes token from hash when calling getSession()
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      // Wait a bit for Supabase to process token
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Check session again after token processing
-      const { data: { session: newSession }, error: sessionError } = await supabaseClient.auth.getSession();
-      
-      if (newSession && !sessionError && !currentUser) {
-        // Skip if email/password login is in progress
-        if (emailPasswordLoginInProgress) {
-          console.log('Email/password login in progress, skipping checkSupabaseSession processing');
-          return;
-        }
-        
-        // Session is set, but user not loaded yet
-        // Wait a bit for trigger to create user
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // Find user with retry attempts
-        const userData = await findUserByEmail(newSession.user.email);
-        
-        if (userData) {
-          currentUser = {
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role
-          };
-          localStorage.setItem('user', JSON.stringify(currentUser));
-          showMainApp();
-          loadData();
-          showToast('Login successful', 'success');
-        } else {
-          console.error('User not found. Session email:', newSession.user.email);
-          showToast('User not found in database. Contact administrator.', 'error', 'Login Error');
-        }
-        
-        // Remove hash from URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    } else if (window.location.hash === '#' && !currentUser) {
-      // If hash is empty (#), but session might be set after OAuth
-      // Check session again
-      await new Promise(resolve => setTimeout(resolve, 300));
-      const { data: { session: finalSession }, error: finalError } = await supabaseClient.auth.getSession();
-      
-      if (finalSession && !finalError) {
-        // Skip if email/password login is in progress
-        if (emailPasswordLoginInProgress) {
-          console.log('Email/password login in progress, skipping checkSupabaseSession processing');
-          return;
-        }
-        
-        // Normalize email for search
-        const normalizedEmail = finalSession.user.email.toLowerCase().trim();
-        // Find user with retry attempts
-        const userData = await findUserByEmail(normalizedEmail);
-        
-        if (userData) {
-          currentUser = {
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role
-          };
-          localStorage.setItem('user', JSON.stringify(currentUser));
-          showMainApp();
-          loadData();
-          showToast('Login successful', 'success');
-          
-          // Remove hash from URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } else {
-          console.error('User not found. Session email:', finalSession.user.email);
-        }
-      }
+    // OAuth callbacks are handled by onAuthStateChange listener
+    // Just clean up URL hash if present
+    if (window.location.hash) {
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   } catch (error) {
     console.error('Session check error:', error);
