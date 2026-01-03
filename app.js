@@ -8,7 +8,13 @@ const CONFIG = {
 // Инициализация Supabase клиента
 let supabaseClient = null;
 if (typeof supabase !== 'undefined') {
-  supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true, // Сохранять сессию в localStorage
+      autoRefreshToken: true, // Автоматически обновлять токен
+      detectSessionInUrl: true // Автоматически обнаруживать сессию в URL
+    }
+  });
 }
 
 // Глобальное состояние
@@ -144,14 +150,17 @@ function setupAuthListener() {
 async function checkSupabaseSession() {
   if (!supabaseClient) {
     console.error('Supabase client not initialized');
+    // Попробуем восстановить из localStorage
+    await restoreUserFromStorage();
     return;
   }
   
   try {
-    // Проверяем существующую сессию
+    // Проверяем существующую сессию (Supabase автоматически восстанавливает из localStorage)
     const { data: { session }, error } = await supabaseClient.auth.getSession();
     
     if (session && !error) {
+      console.log('Session found, loading user data...');
       // Получаем информацию о пользователе из таблицы users
       const userData = await findUserByEmail(session.user.email, 3, 200);
       
@@ -165,7 +174,16 @@ async function checkSupabaseSession() {
         localStorage.setItem('user', JSON.stringify(currentUser));
         showMainApp();
         loadData();
+        console.log('User restored from session:', currentUser.email);
+      } else {
+        console.warn('Session exists but user not found in database');
+        // Попробуем восстановить из localStorage как fallback
+        await restoreUserFromStorage();
       }
+    } else {
+      // Нет активной сессии, попробуем восстановить из localStorage
+      console.log('No active session, trying to restore from storage...');
+      await restoreUserFromStorage();
     }
     
     // Обработка OAuth callback (если есть hash в URL с токеном)
@@ -236,17 +254,51 @@ async function checkSupabaseSession() {
   } catch (error) {
     console.error('Session check error:', error);
     // Проверяем сохранённую сессию как fallback
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      try {
-        currentUser = JSON.parse(savedUser);
-        showMainApp();
-        loadData();
-      } catch (e) {
-        localStorage.removeItem('user');
+    await restoreUserFromStorage();
+  }
+}
+
+// Восстановление пользователя из localStorage
+async function restoreUserFromStorage() {
+  const savedUser = localStorage.getItem('user');
+  if (savedUser) {
+    try {
+      const parsedUser = JSON.parse(savedUser);
+      
+      // Проверяем, что сессия Supabase все еще валидна
+      if (supabaseClient) {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (session && !error && session.user.email === parsedUser.email) {
+          // Сессия валидна, используем сохраненного пользователя
+          currentUser = parsedUser;
+          showMainApp();
+          loadData();
+          return true;
+        } else {
+          // Сессия истекла, но попробуем обновить токен
+          try {
+            const { data: { session: refreshedSession }, error: refreshError } = await supabaseClient.auth.refreshSession();
+            if (refreshedSession && !refreshError && refreshedSession.user.email === parsedUser.email) {
+              currentUser = parsedUser;
+              showMainApp();
+              loadData();
+              return true;
+            }
+          } catch (refreshErr) {
+            console.log('Could not refresh session:', refreshErr);
+          }
+        }
       }
+      
+      // Если сессия не валидна, удаляем сохраненного пользователя
+      localStorage.removeItem('user');
+    } catch (e) {
+      console.error('Error parsing saved user:', e);
+      localStorage.removeItem('user');
     }
   }
+  return false;
 }
 
 // Инициализация вкладок авторизации
