@@ -515,11 +515,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: start;
-  transition: border-color 0.2s;
+  gap: 16px;
+  transition: all 0.2s;
+  background: white;
 }
 
 .log-item:hover {
   border-color: var(--gray-300);
+  box-shadow: var(--shadow);
 }
 
 .log-item-left {
@@ -574,6 +577,33 @@ body {
 
 .log-credited.negative {
   color: var(--danger);
+}
+
+.log-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.log-delete-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.log-item:hover .log-delete-btn {
+  opacity: 0.6;
+}
+
+.log-delete-btn:hover {
+  opacity: 1 !important;
+  background: var(--gray-100);
 }
 
 /* Users List */
@@ -1173,6 +1203,26 @@ select:focus-visible {
   .balance-stats {
     flex-direction: column;
     gap: 16px;
+  }
+  
+  .log-item {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .log-item-right {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .log-delete-btn {
+    opacity: 0.6;
+  }
+  
+  .log-credited {
+    font-size: 20px;
   }
 
   .logs-table {

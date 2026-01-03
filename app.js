@@ -982,6 +982,10 @@ function setupEventListeners() {
   // Date filters - user view
   const userDateFilters = document.getElementById('userDateFilters');
   if (userDateFilters) {
+    // Set default active filter
+    const defaultFilter = userDateFilters.querySelector('[data-filter="all"]');
+    if (defaultFilter) defaultFilter.classList.add('active');
+    
     userDateFilters.querySelectorAll('.date-filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         userDateFilters.querySelectorAll('.date-filter-btn').forEach(b => b.classList.remove('active'));
@@ -1190,21 +1194,37 @@ function setupEventListeners() {
   
   
   
-  // Search input for user view
+  // Search input for user view with debounce for performance
   const userSearchInput = document.getElementById('userSearchInput');
   if (userSearchInput) {
+    let searchTimeout = null;
     userSearchInput.addEventListener('input', () => {
-      const searchTerm = userSearchInput.value.toLowerCase();
-      if (searchTerm) {
-        filteredLogs = currentLogs.filter(log => 
-          (log.comment && log.comment.toLowerCase().includes(searchTerm))
-        );
-      } else {
-        filteredLogs = filterLogsByDate(currentLogs, currentDateFilter);
-      }
-      renderUserLogs();
+      // Debounce search for better performance
+      if (searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const searchTerm = userSearchInput.value.toLowerCase();
+        if (searchTerm) {
+          filteredLogs = currentLogs.filter(log => 
+            (log.comment && log.comment.toLowerCase().includes(searchTerm)) ||
+            formatDate(log.date).toLowerCase().includes(searchTerm)
+          );
+        } else {
+          filteredLogs = filterLogsByDate(currentLogs, currentDateFilter);
+        }
+        renderUserLogs();
+      }, 150); // 150ms debounce
     });
   }
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Escape closes modals
+    if (e.key === 'Escape') {
+      hideDeleteModal();
+      hideEditNameModal();
+      hideDeleteUserModal();
+    }
+  });
 }
 
 // Show main app
@@ -1553,8 +1573,13 @@ function renderUserLogs() {
           ${log.comment ? `<div class="log-comment">${escapeHtml(log.comment)}</div>` : ''}
           ${log.type === 'timeoff' && log.approvedBy ? `<div class="log-approved-by" style="margin-top: 4px; font-size: 12px; color: var(--gray-600);">Approved By: <strong>${escapeHtml(log.approvedBy)}</strong></div>` : ''}
         </div>
-        <div class="log-credited ${credited > 0 ? 'positive' : 'negative'}">
-          ${credited > 0 ? '+' : ''}${credited} hrs
+        <div class="log-item-right">
+          <div class="log-credited ${credited > 0 ? 'positive' : 'negative'}">
+            ${credited > 0 ? '+' : ''}${credited} hrs
+          </div>
+          <button class="log-delete-btn" onclick="showDeleteModal(${log.id})" title="Delete entry">
+            🗑️
+          </button>
         </div>
       </div>
     `;
