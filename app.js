@@ -99,61 +99,51 @@ window.addEventListener('beforeunload', () => {
 });
 
 // Function to find user with retry attempts
-async function findUserByEmail(email, maxAttempts = 5, delay = 500) {
+async function findUserByEmail(email, maxAttempts = 2, delay = 300) {
   if (!supabaseClient || !email) return null;
   
   const normalizedEmail = email.toLowerCase().trim();
-  console.log('Searching for user with email:', normalizedEmail, '(normalized from:', email, ')');
+  console.log('Searching for user with email:', normalizedEmail);
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      // First try exact search
+      // Try case-insensitive search using ilike
       let { data: userData, error: userError } = await supabaseClient
         .from('users')
         .select('*')
-        .eq('email', email)
+        .ilike('email', normalizedEmail)
         .maybeSingle();
       
-      // If not found, try case-insensitive search by getting all users
-      if (!userData || userError) {
-        console.log('Exact match not found, trying case-insensitive search...');
-        const { data: allUsers, error: allError } = await supabaseClient
+      // If not found with ilike, try exact match
+      if (!userData && !userError) {
+        const result = await supabaseClient
           .from('users')
-          .select('*');
-        
-        if (allUsers && !allError) {
-          console.log('All users in database:', allUsers.map(u => ({ email: u.email, id: u.id })));
-          userData = allUsers.find(u => u.email && u.email.toLowerCase().trim() === normalizedEmail);
-          if (userData) {
-            console.log('User found in case-insensitive search:', userData);
-            userError = null;
-          }
-        }
+          .select('*')
+          .eq('email', normalizedEmail)
+          .maybeSingle();
+        userData = result.data;
+        userError = result.error;
       }
       
       if (userData && !userError) {
-        console.log('User found on attempt', attempt, ':', userData);
+        console.log('User found:', userData.email);
         return userData;
       }
       
       // If this is not the last attempt, wait before next one
       if (attempt < maxAttempts) {
-        console.log(`User not found, retrying in ${delay}ms (attempt ${attempt}/${maxAttempts})...`);
+        console.log(`User not found, retrying (${attempt}/${maxAttempts})...`);
         await new Promise(resolve => setTimeout(resolve, delay));
-      } else {
-        console.error('User not found after', maxAttempts, 'attempts. Email searched:', normalizedEmail);
-        if (userError) {
-          console.error('Last error:', userError);
-        }
       }
     } catch (error) {
-      console.error('Error searching for user (attempt', attempt, '):', error);
+      console.error('Error searching for user:', error);
       if (attempt < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   }
   
+  console.warn('User not found after', maxAttempts, 'attempts');
   return null;
 }
 
@@ -162,7 +152,7 @@ function setupAuthListener() {
   if (!supabaseClient) return;
   
   supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    console.log('Auth state changed:', event, session);
+    console.log('Auth state changed:', event);
     
     if (event === 'SIGNED_IN' && session) {
       // User successfully signed in
@@ -172,11 +162,9 @@ function setupAuthListener() {
         return;
       }
       
-      // Skip showing toast if email/password login is in progress (it will show its own message)
-      if (emailPasswordLoginInProgress) {
-        console.log('Email/password login in progress, skipping onAuthStateChange processing');
-        // Don't process here - let handleEmailLogin handle everything
-        // This prevents duplicate processing and UI updates
+      // Skip if any login process is active
+      if (emailPasswordLoginInProgress || isLoggingIn) {
+        console.log('Login in progress, skipping onAuthStateChange processing');
         return;
       }
       
@@ -727,9 +715,15 @@ async function handleEmailLogin(e) {
     loginButton.textContent = 'Signing in...';
   }
   
-  // Safety timeout - if login takes more than 15 seconds, reset state
-  const safetyTimeout = setTimeout(() => {
-    console.warn('Login timeout - resetting state');
+  // Safety timeout - if login takes more than 10 seconds, reset state and sign out
+  const safetyTimeout = setTimeout(async () => {
+    console.warn('Login timeout - resetting state and signing out');
+    // Sign out to clear the auth state and prevent re-processing loops
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (e) {
+      console.error('Error signing out on timeout:', e);
+    }
     isLoggingIn = false;
     emailPasswordLoginInProgress = false;
     hideLoading();
@@ -739,7 +733,7 @@ async function handleEmailLogin(e) {
       btn.textContent = 'Sign In';
     }
     showToast('Login timed out. Please try again.', 'warning');
-  }, 15000);
+  }, 10000);
   
   try {
     // Sign in with email/password
@@ -767,11 +761,10 @@ async function handleEmailLogin(e) {
     }
     
     if (authData.user) {
-      // Wait a bit for trigger to create user if needed
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait briefly for trigger to create user if needed
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Find user in database
-      // If user doesn't exist in users table but exists in auth, create them
       let userData = await findUserByEmail(normalizedEmail);
       
       if (!userData) {
@@ -816,9 +809,11 @@ async function handleEmailLogin(e) {
         };
         localStorage.setItem('user', JSON.stringify(currentUser));
         
-        // Hide loading and update UI
+        // Clear timeout and flags before UI update
+        clearTimeout(safetyTimeout);
         hideLoading();
         isLoggingIn = false;
+        emailPasswordLoginInProgress = false;
         
         // Re-enable login button
         const loginButton = document.querySelector('#emailLoginForm button[type="submit"]');
@@ -827,12 +822,9 @@ async function handleEmailLogin(e) {
           loginButton.textContent = 'Sign In';
         }
         
-        // Show main application - force UI update
+        // Show main application
         showMainApp();
-        await loadData(); // Wait for data to load
-        
-        // Force a small delay to ensure UI is updated
-        await new Promise(resolve => setTimeout(resolve, 100));
+        loadData(); // Don't await, let it load in background
         
         showToast('Login successful!', 'success');
         
@@ -841,56 +833,13 @@ async function handleEmailLogin(e) {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
         
-        // Reset flag after UI is shown
-        emailPasswordLoginInProgress = false;
-        
         return; // Exit, login successful
       } else {
-        // If user still not found, wait a bit more
-        console.warn('User not found immediately, waiting for auth state change...');
-        // onAuthStateChange should handle this, but give it time
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Check again
-        const retryUserData = await findUserByEmail(normalizedEmail);
-        if (retryUserData) {
-          currentUser = {
-            id: retryUserData.id,
-            name: retryUserData.name,
-            email: retryUserData.email,
-            role: retryUserData.role
-          };
-          localStorage.setItem('user', JSON.stringify(currentUser));
-          
-          hideLoading();
-          isLoggingIn = false;
-          
-          const loginButton = document.querySelector('#emailLoginForm button[type="submit"]');
-          if (loginButton) {
-            loginButton.disabled = false;
-            loginButton.textContent = 'Sign In';
-          }
-          
-          // Force UI update
-          showMainApp();
-          await loadData();
-          await new Promise(resolve => setTimeout(resolve, 100));
-          
-          showToast('Login successful!', 'success');
-          emailPasswordLoginInProgress = false;
-          
-          if (window.location.hash) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-          return;
-        } else {
-          // User not found in database after all attempts - this shouldn't happen
-          console.error('User authenticated but not found in database');
-          showToast('Account error. Please contact administrator or try again.', 'error', 'Login Error');
-          // Sign out since we can't complete login properly
-          await supabaseClient.auth.signOut();
-          return;
-        }
+        // User not found in database - sign out and show error
+        console.error('User authenticated but not found in database');
+        await supabaseClient.auth.signOut();
+        showToast('Account error. Please contact administrator or try again.', 'error', 'Login Error');
+        return;
       }
     }
   } catch (error) {
