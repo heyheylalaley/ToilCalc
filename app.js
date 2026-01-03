@@ -98,53 +98,36 @@ window.addEventListener('beforeunload', () => {
   isLoggingIn = false;
 });
 
-// Function to find user with retry attempts
-async function findUserByEmail(email, maxAttempts = 2, delay = 300) {
+// Function to find user by email - simple and fast
+async function findUserByEmail(email) {
   if (!supabaseClient || !email) return null;
   
   const normalizedEmail = email.toLowerCase().trim();
-  console.log('Searching for user with email:', normalizedEmail);
+  console.log('Searching for user:', normalizedEmail);
   
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      // Try case-insensitive search using ilike
-      let { data: userData, error: userError } = await supabaseClient
-        .from('users')
-        .select('*')
-        .ilike('email', normalizedEmail)
-        .maybeSingle();
-      
-      // If not found with ilike, try exact match
-      if (!userData && !userError) {
-        const result = await supabaseClient
-          .from('users')
-          .select('*')
-          .eq('email', normalizedEmail)
-          .maybeSingle();
-        userData = result.data;
-        userError = result.error;
-      }
-      
-      if (userData && !userError) {
-        console.log('User found:', userData.email);
-        return userData;
-      }
-      
-      // If this is not the last attempt, wait before next one
-      if (attempt < maxAttempts) {
-        console.log(`User not found, retrying (${attempt}/${maxAttempts})...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    } catch (error) {
-      console.error('Error searching for user:', error);
-      if (attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
+  try {
+    const { data: userData, error: userError } = await supabaseClient
+      .from('users')
+      .select('id, email, name, role')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    
+    if (userError) {
+      console.error('Error finding user:', userError.message);
+      return null;
     }
+    
+    if (userData) {
+      console.log('User found:', userData.email);
+      return userData;
+    }
+    
+    console.log('User not found in database');
+    return null;
+  } catch (error) {
+    console.error('Error searching for user:', error);
+    return null;
   }
-  
-  console.warn('User not found after', maxAttempts, 'attempts');
-  return null;
 }
 
 // Setup authentication state change listener
@@ -384,57 +367,39 @@ async function restoreUserFromStorage() {
   if (!supabaseClient) return false;
   
   try {
-    // First check for valid Supabase session
     const { data: { session }, error } = await supabaseClient.auth.getSession();
     
     if (session && !error) {
       const sessionEmail = session.user.email.toLowerCase().trim();
+      console.log('Valid session found for:', sessionEmail);
       
-      // Try to find user in database
+      // First try localStorage (fastest)
+      const savedUser = localStorage.getItem('user');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          if (parsed.email?.toLowerCase() === sessionEmail && parsed.id) {
+            currentUser = parsed;
+            showMainApp();
+            loadData();
+            console.log('User restored from localStorage:', currentUser.email);
+            return true;
+          }
+        } catch (e) {}
+      }
+      
+      // Fallback to database query
       const userData = await findUserByEmail(sessionEmail);
-      
       if (userData) {
-        currentUser = {
-          id: userData.id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role
-        };
+        currentUser = userData;
         localStorage.setItem('user', JSON.stringify(currentUser));
         showMainApp();
         loadData();
-        console.log('User restored from session:', currentUser.email);
+        console.log('User restored from database:', currentUser.email);
         return true;
       }
     }
     
-    // Try to refresh the session
-    try {
-      const { data: { session: refreshedSession }, error: refreshError } = await supabaseClient.auth.refreshSession();
-      
-      if (refreshedSession && !refreshError) {
-        const sessionEmail = refreshedSession.user.email.toLowerCase().trim();
-        const userData = await findUserByEmail(sessionEmail);
-        
-        if (userData) {
-          currentUser = {
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role
-          };
-          localStorage.setItem('user', JSON.stringify(currentUser));
-          showMainApp();
-          loadData();
-          console.log('User restored after token refresh:', currentUser.email);
-          return true;
-        }
-      }
-    } catch (refreshErr) {
-      console.log('Could not refresh session:', refreshErr);
-    }
-    
-    // No valid session - clear localStorage
     localStorage.removeItem('user');
   } catch (e) {
     console.error('Error restoring user:', e);
@@ -770,55 +735,45 @@ async function handleEmailLogin(e) {
     }
     
     if (authData.user) {
-      // Wait briefly for trigger to create user if needed
-      await new Promise(resolve => setTimeout(resolve, 200));
+      console.log('Auth successful, setting up user...');
       
-      // Find user in database
-      let userData = await findUserByEmail(normalizedEmail);
+      // Get user name from auth metadata or email
+      const userName = authData.user.user_metadata?.full_name || 
+                      authData.user.user_metadata?.name || 
+                      normalizedEmail.split('@')[0];
       
-      if (!userData) {
-        // User exists in auth but not in users table - trigger might have failed
-        // Try to create user manually
-        console.warn('User exists in auth but not in users table, creating user...');
-        const userName = authData.user.user_metadata?.full_name || 
-                        authData.user.user_metadata?.name || 
-                        normalizedEmail.split('@')[0];
-        
-        const { data: newUser, error: createError } = await supabaseClient
+      // Use upsert to ensure user exists in database
+      try {
+        const { data: userData, error: upsertError } = await supabaseClient
           .from('users')
-          .insert({
-            email: normalizedEmail,
-            name: userName,
-            role: 'user'
-          })
-          .select()
+          .upsert(
+            { email: normalizedEmail, name: userName },
+            { onConflict: 'email', ignoreDuplicates: false }
+          )
+          .select('id, email, name, role')
           .single();
         
-        if (createError && !createError.message.includes('duplicate')) {
-          console.error('Error creating user:', createError);
-          showToast('User account created but database error occurred. Please contact administrator.', 'error', 'Error');
-          hideLoading();
-          return;
+        if (upsertError) {
+          console.error('Upsert error:', upsertError);
+          // Try simple select as fallback
+          const { data: existingUser } = await supabaseClient
+            .from('users')
+            .select('id, email, name, role')
+            .eq('email', normalizedEmail)
+            .single();
+          
+          if (existingUser) {
+            currentUser = existingUser;
+          } else {
+            throw new Error('Could not find or create user');
+          }
+        } else {
+          currentUser = userData;
         }
         
-        if (newUser) {
-          userData = newUser;
-        } else {
-          // Try to find again after insert
-          userData = await findUserByEmail(normalizedEmail);
-        }
-      }
-      
-      if (userData) {
-        currentUser = {
-          id: userData.id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role
-        };
         localStorage.setItem('user', JSON.stringify(currentUser));
         
-        // Clear timeout and flags before UI update
+        // Clear timeout and flags
         clearTimeout(safetyTimeout);
         hideLoading();
         isLoggingIn = false;
@@ -833,7 +788,7 @@ async function handleEmailLogin(e) {
         
         // Show main application
         showMainApp();
-        loadData(); // Don't await, let it load in background
+        loadData();
         
         showToast('Login successful!', 'success');
         
@@ -842,45 +797,10 @@ async function handleEmailLogin(e) {
           window.history.replaceState({}, document.title, window.location.pathname);
         }
         
-        return; // Exit, login successful
-      } else {
-        // User not found in database - create user record
-        console.warn('User authenticated but not found in database, creating user...');
-        const userName = authData.user.user_metadata?.full_name || 
-                        authData.user.user_metadata?.name || 
-                        normalizedEmail.split('@')[0];
-        
-        try {
-          const { data: newUser, error: createError } = await supabaseClient
-            .from('users')
-            .insert({ email: normalizedEmail, name: userName, role: 'user' })
-            .select()
-            .single();
-          
-          if (newUser && !createError) {
-            currentUser = {
-              id: newUser.id,
-              name: newUser.name,
-              email: newUser.email,
-              role: newUser.role
-            };
-            localStorage.setItem('user', JSON.stringify(currentUser));
-            
-            clearTimeout(safetyTimeout);
-            hideLoading();
-            isLoggingIn = false;
-            emailPasswordLoginInProgress = false;
-            
-            showMainApp();
-            loadData();
-            showToast('Login successful!', 'success');
-            return;
-          }
-        } catch (e) {
-          console.error('Error creating user:', e);
-        }
-        
-        showToast('Account setup error. Please try again or contact administrator.', 'error', 'Login Error');
+        return;
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        showToast('Database error. Please try again.', 'error', 'Error');
         return;
       }
     }
