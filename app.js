@@ -1805,13 +1805,25 @@ function renderUserLogs() {
   }
   
   // Sort by date - handle ISO format dates
+  // Secondary sort by ID when dates are equal (ensures consistent ordering)
   const sortedLogs = [...filteredLogs].sort((a, b) => {
     const dateA = new Date(a.date);
     const dateB = new Date(b.date);
+    const dateCompare = dateA.getTime() - dateB.getTime();
+    
+    // If dates are equal, sort by ID (newer entries have higher IDs)
+    if (dateCompare === 0) {
+      if (sortOrder === 'asc') {
+        return (a.id || 0) - (b.id || 0); // Older first (lower ID first)
+      } else {
+        return (b.id || 0) - (a.id || 0); // Newer first (higher ID first)
+      }
+    }
+    
     if (sortOrder === 'asc') {
-      return dateA.getTime() - dateB.getTime(); // Ascending order (oldest first)
+      return dateCompare; // Ascending order (oldest first)
     } else {
-      return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+      return -dateCompare; // Descending order (newest first)
     }
   });
   
@@ -1997,13 +2009,25 @@ function renderAdminLogs() {
   let logsToShow = filteredLogs;
   
   // Sort by date - handle ISO format dates
+  // Secondary sort by ID when dates are equal (ensures consistent ordering)
   logsToShow = [...logsToShow].sort((a, b) => {
     const dateA = new Date(a.date);
     const dateB = new Date(b.date);
+    const dateCompare = dateA.getTime() - dateB.getTime();
+    
+    // If dates are equal, sort by ID (newer entries have higher IDs)
+    if (dateCompare === 0) {
+      if (sortOrder === 'asc') {
+        return (a.id || 0) - (b.id || 0); // Older first (lower ID first)
+      } else {
+        return (b.id || 0) - (a.id || 0); // Newer first (higher ID first)
+      }
+    }
+    
     if (sortOrder === 'asc') {
-      return dateA.getTime() - dateB.getTime(); // Ascending order (oldest first)
+      return dateCompare; // Ascending order (oldest first)
     } else {
-      return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+      return -dateCompare; // Descending order (newest first)
     }
   });
   
