@@ -1,0 +1,586 @@
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, Users, Settings, Download, LogOut, Plus, Trash2 } from 'lucide-react';
+
+// Конфигурация - ЗАМЕНИТЕ НА СВОИ ЗНАЧЕНИЯ
+const CONFIG = {
+  GAS_API_URL: 'https://script.google.com/macros/s/AKfycbx2hhfbOX5MydTueHlI5wjjU5A14W9eDvsXovKGmH-lzPj7m_T5vbLfZQ9czrmNV8i0/exec',
+  GOOGLE_CLIENT_ID: '821999196894-20d8semsbtdp3dcpu4qf2p1h0u4okb39.apps.googleusercontent.com'
+};
+
+const OvertimeTracker = () => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState([]);
+  const [balance, setBalance] = useState(0);
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [multiplier, setMultiplier] = useState(1.5);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Форма добавления записи
+  const [formData, setFormData] = useState({
+    type: 'overtime',
+    date: new Date().toISOString().split('T')[0],
+    hours: '',
+    comment: ''
+  });
+
+  // Инициализация Google Sign-In
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    script.onload = () => {
+      window.google.accounts.id.initialize({
+        client_id: CONFIG.GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse
+      });
+      
+      window.google.accounts.id.renderButton(
+        document.getElementById('googleSignInButton'),
+        { theme: 'outline', size: 'large', text: 'signin_with', locale: 'ru' }
+      );
+      
+      setLoading(false);
+    };
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Обработка авторизации
+  const handleCredentialResponse = async (response) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${CONFIG.GAS_API_URL}?action=login`, {
+        method: 'POST',
+        body: JSON.stringify({ token: response.credential })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        setUser(data.user);
+        loadData(data.user);
+      } else {
+        alert('Ошибка авторизации: ' + data.message);
+      }
+    } catch (error) {
+      alert('Ошибка подключения к серверу');
+    }
+    setLoading(false);
+  };
+
+  // Загрузка данных
+  const loadData = async (currentUser) => {
+    try {
+      if (currentUser.role === 'admin') {
+        await loadAdminData();
+      } else {
+        await loadUserData(currentUser.email);
+      }
+      await loadSettings();
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error);
+    }
+  };
+
+  const loadUserData = async (email) => {
+    const res = await fetch(`${CONFIG.GAS_API_URL}?action=getLogs&email=${email}`);
+    const data = await res.json();
+    if (data.success) {
+      setLogs(data.logs);
+      calculateBalance(data.logs);
+    }
+  };
+
+  const loadAdminData = async () => {
+    const [logsRes, usersRes] = await Promise.all([
+      fetch(`${CONFIG.GAS_API_URL}?action=getAllLogs`),
+      fetch(`${CONFIG.GAS_API_URL}?action=getUsers`)
+    ]);
+    
+    const logsData = await logsRes.json();
+    const usersData = await usersRes.json();
+    
+    if (logsData.success) setLogs(logsData.logs);
+    if (usersData.success) setUsers(usersData.users);
+  };
+
+  const loadSettings = async () => {
+    const res = await fetch(`${CONFIG.GAS_API_URL}?action=getSettings`);
+    const data = await res.json();
+    if (data.success) {
+      setMultiplier(parseFloat(data.settings.overtimeMultiplier) || 1.5);
+    }
+  };
+
+  // Расчёт баланса
+  const calculateBalance = (logsList) => {
+    const total = logsList.reduce((sum, log) => sum + (log.creditedHours || 0), 0);
+    setBalance(total);
+  };
+
+  // Добавление записи
+  const handleAddLog = async () => {
+    if (!formData.hours || parseFloat(formData.hours) <= 0) {
+      alert('Укажите корректное количество часов');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const factHours = parseFloat(formData.hours);
+      const creditedHours = formData.type === 'overtime' 
+        ? factHours * multiplier 
+        : -factHours;
+
+      const res = await fetch(`${CONFIG.GAS_API_URL}?action=addLog`, {
+        method: 'POST',
+        body: JSON.stringify({
+          userEmail: user.email,
+          date: formData.date,
+          type: formData.type,
+          factHours: factHours,
+          creditedHours: creditedHours,
+          comment: formData.comment
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setFormData({ type: 'overtime', date: new Date().toISOString().split('T')[0], hours: '', comment: '' });
+        setShowAddForm(false);
+        loadData(user);
+      } else {
+        alert('Ошибка: ' + data.message);
+      }
+    } catch (error) {
+      alert('Ошибка сохранения');
+    }
+    setLoading(false);
+  };
+
+  // Удаление записи
+  const handleDeleteLog = async (logId) => {
+    if (!confirm('Удалить запись?')) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${CONFIG.GAS_API_URL}?action=deleteLog&id=${logId}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadData(user);
+      }
+    } catch (error) {
+      alert('Ошибка удаления');
+    }
+    setLoading(false);
+  };
+
+  // Экспорт отчёта
+  const handleExport = async () => {
+    const month = prompt('Укажите месяц для экспорта (YYYY-MM):', '2025-01');
+    if (!month) return;
+
+    window.open(`${CONFIG.GAS_API_URL}?action=export&month=${month}`, '_blank');
+  };
+
+  // Обновление коэффициента
+  const handleUpdateMultiplier = async () => {
+    const newValue = prompt('Новый коэффициент переработки:', multiplier);
+    if (!newValue) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${CONFIG.GAS_API_URL}?action=updateSettings`, {
+        method: 'POST',
+        body: JSON.stringify({ overtimeMultiplier: parseFloat(newValue) })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMultiplier(parseFloat(newValue));
+        alert('Коэффициент обновлён');
+      }
+    } catch (error) {
+      alert('Ошибка обновления');
+    }
+    setLoading(false);
+  };
+
+  const logout = () => {
+    setUser(null);
+    setLogs([]);
+    setBalance(0);
+    setUsers([]);
+  };
+
+  // Фильтрация логов для выбранного пользователя
+  const displayLogs = selectedUser 
+    ? logs.filter(log => log.userEmail === selectedUser)
+    : logs.filter(log => log.userEmail === user?.email);
+
+  // Экран авторизации
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+          <div className="text-center mb-8">
+            <Clock className="w-16 h-16 mx-auto text-indigo-600 mb-4" />
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Учёт переработок</h1>
+            <p className="text-gray-600">и отгулов (1.5x)</p>
+          </div>
+          
+          {loading ? (
+            <div className="text-center py-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            </div>
+          ) : (
+            <div id="googleSignInButton" className="flex justify-center"></div>
+          )}
+          
+          <p className="text-xs text-gray-500 text-center mt-6">
+            Войдите с помощью корпоративного Google аккаунта
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Интерфейс администратора
+  if (user.role === 'admin') {
+    const userBalances = users.map(u => ({
+      ...u,
+      balance: logs
+        .filter(log => log.userEmail === u.email)
+        .reduce((sum, log) => sum + (log.creditedHours || 0), 0)
+    }));
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Хедер */}
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <Clock className="w-8 h-8 text-indigo-600" />
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">Админ-панель</h1>
+                <p className="text-sm text-gray-600">{user.name}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleUpdateMultiplier}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                <Settings className="w-4 h-4" />
+                Коэфф: {multiplier}x
+              </button>
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                <Download className="w-4 h-4" />
+                Экспорт
+              </button>
+              <button
+                onClick={logout}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto p-6">
+          {/* Список сотрудников */}
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Сотрудники
+            </h2>
+            <div className="grid gap-3">
+              {userBalances.map(u => (
+                <div
+                  key={u.email}
+                  onClick={() => setSelectedUser(u.email === selectedUser ? null : u.email)}
+                  className={`p-4 rounded-lg border-2 cursor-pointer transition ${
+                    selectedUser === u.email
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold">{u.name}</p>
+                      <p className="text-sm text-gray-600">{u.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${
+                        u.balance > 0 ? 'text-green-600' : u.balance < 0 ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {u.balance.toFixed(1)} ч
+                      </p>
+                      <p className="text-xs text-gray-500">баланс</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* История */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-bold mb-4">
+              {selectedUser 
+                ? `История: ${users.find(u => u.email === selectedUser)?.name}`
+                : 'Все записи'}
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Дата</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Сотрудник</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Тип</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Факт (ч)</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Начислено</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Комментарий</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Действия</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {displayLogs.map(log => (
+                    <tr key={log.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm">{log.date}</td>
+                      <td className="px-4 py-3 text-sm">{users.find(u => u.email === log.userEmail)?.name}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          log.type === 'overtime'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {log.type === 'overtime' ? 'Переработка' : 'Отгул'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right">{log.factHours}</td>
+                      <td className={`px-4 py-3 text-sm text-right font-semibold ${
+                        log.creditedHours > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {log.creditedHours > 0 ? '+' : ''}{log.creditedHours}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{log.comment}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleDeleteLog(log.id)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Интерфейс сотрудника
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Хедер */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <Clock className="w-8 h-8 text-indigo-600" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">Учёт переработок</h1>
+              <p className="text-sm text-gray-600">{user.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+          >
+            <LogOut className="w-4 h-4" />
+            Выход
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto p-6">
+        {/* Баланс */}
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl shadow-lg p-8 mb-6 text-white">
+          <p className="text-indigo-200 text-sm mb-2">Ваш текущий баланс</p>
+          <p className="text-6xl font-bold mb-2">
+            {balance.toFixed(1)} ч
+          </p>
+          <p className="text-indigo-200 text-sm">
+            Коэффициент переработки: {multiplier}x
+          </p>
+        </div>
+
+        {/* Форма добавления */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          {!showAddForm ? (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
+            >
+              <Plus className="w-5 h-5" />
+              Добавить запись
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <h3 className="font-bold text-lg mb-4">Новая запись</h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Тип</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setFormData({...formData, type: 'overtime'})}
+                    className={`p-3 rounded-lg border-2 font-semibold transition ${
+                      formData.type === 'overtime'
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    Переработка
+                  </button>
+                  <button
+                    onClick={() => setFormData({...formData, type: 'timeoff'})}
+                    className={`p-3 rounded-lg border-2 font-semibold transition ${
+                      formData.type === 'timeoff'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    Отгул
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Дата</label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Часы</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0.25"
+                  value={formData.hours}
+                  onChange={(e) => setFormData({...formData, hours: e.target.value})}
+                  placeholder="Например: 4.5"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+                {formData.type === 'overtime' && formData.hours && (
+                  <p className="text-sm text-green-600 mt-1">
+                    Начислено: {(parseFloat(formData.hours) * multiplier).toFixed(1)} ч
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Комментарий</label>
+                <input
+                  type="text"
+                  value={formData.comment}
+                  onChange={(e) => setFormData({...formData, comment: e.target.value})}
+                  placeholder="Например: Проект X, срочная задача"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddLog}
+                  disabled={loading}
+                  className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold disabled:opacity-50"
+                >
+                  {loading ? 'Сохранение...' : 'Сохранить'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setFormData({ type: 'overtime', date: new Date().toISOString().split('T')[0], hours: '', comment: '' });
+                  }}
+                  className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* История */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Ваша история
+          </h2>
+          
+          {displayLogs.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">Записей пока нет</p>
+          ) : (
+            <div className="space-y-3">
+              {displayLogs.map(log => (
+                <div key={log.id} className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          log.type === 'overtime'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-orange-100 text-orange-800'
+                        }`}>
+                          {log.type === 'overtime' ? 'Переработка' : 'Отгул'}
+                        </span>
+                        <span className="text-sm text-gray-600">{log.date}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-1">
+                        Фактически: <span className="font-semibold">{log.factHours} ч</span>
+                      </p>
+                      {log.comment && (
+                        <p className="text-sm text-gray-600">{log.comment}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${
+                        log.creditedHours > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {log.creditedHours > 0 ? '+' : ''}{log.creditedHours} ч
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OvertimeTracker;
