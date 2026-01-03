@@ -129,6 +129,25 @@ php -S localhost:8000
 
 Then open `http://localhost:8000` in your browser.
 
+## 🚨 Production Considerations
+
+### Current Setup (GitHub Pages)
+- ✅ **Suitable for**: Small teams (up to 50 users), low traffic
+- ⚠️ **Limitations**: 
+  - No SLA guarantee
+  - 100 GB/month bandwidth limit
+  - 10 builds/hour limit
+  - Not intended for commercial use per GitHub ToS
+
+### For Production (40+ users)
+Consider upgrading to:
+- **Netlify** (Free tier: 100 GB bandwidth, better SLA)
+- **Vercel** (Free tier: 100 GB bandwidth, excellent performance)
+- **Cloudflare Pages** (Free tier: Unlimited bandwidth, global CDN)
+- **Paid options**: AWS S3 + CloudFront, Azure Static Web Apps
+
+**Note**: Your backend (Supabase) handles the main load. Frontend hosting is just for static files.
+
 ## 📝 License
 
 MIT License
