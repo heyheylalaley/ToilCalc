@@ -139,12 +139,53 @@ Then open `http://localhost:8000` in your browser.
   - 10 builds/hour limit
   - Not intended for commercial use per GitHub ToS
 
-### For Production (40+ users)
-Consider upgrading to:
-- **Netlify** (Free tier: 100 GB bandwidth, better SLA)
-- **Vercel** (Free tier: 100 GB bandwidth, excellent performance)
-- **Cloudflare Pages** (Free tier: Unlimited bandwidth, global CDN)
-- **Paid options**: AWS S3 + CloudFront, Azure Static Web Apps
+### Netlify (Recommended Alternative)
+
+#### Free Plan:
+- ✅ **100 GB/month** bandwidth (same as GitHub Pages)
+- ✅ **Unlimited sites** (vs GitHub Pages: 1 per repo)
+- ✅ **125,000 serverless function invocations/month**
+- ✅ **Automatic SSL certificates**
+- ✅ **Global CDN** (faster than GitHub Pages)
+- ✅ **Commercial use allowed** (unlike GitHub Pages)
+- ✅ **Better support** (community + docs)
+- ⚠️ **No SLA** on free plan (but better uptime than GitHub Pages)
+- ⚠️ **Build time**: 300 minutes/month
+
+#### Pro Plan ($19/month):
+- ✅ **1 TB/month** bandwidth
+- ✅ **SLA: 99.99% uptime** guarantee
+- ✅ **Priority support**
+- ✅ **1,000 build minutes/month**
+- ✅ **Advanced analytics**
+- ✅ **Team collaboration features**
+
+#### Business Plan ($99/month):
+- ✅ **1.5 TB/month** bandwidth
+- ✅ **SLA: 99.99% uptime** guarantee
+- ✅ **24/7 priority support**
+- ✅ **5,000 build minutes/month**
+- ✅ **Advanced security features**
+- ✅ **Role-based access control**
+
+### Comparison: GitHub Pages vs Netlify
+
+| Feature | GitHub Pages | Netlify Free | Netlify Pro |
+|---------|-------------|--------------|-------------|
+| Bandwidth | 100 GB/month | 100 GB/month | 1 TB/month |
+| SLA | ❌ None | ❌ None | ✅ 99.99% |
+| Commercial Use | ⚠️ Not allowed | ✅ Allowed | ✅ Allowed |
+| Builds | 10/hour | 300 min/month | 1,000 min/month |
+| Support | Community only | Community + Docs | Priority |
+| CDN Speed | Good | Excellent | Excellent |
+| SSL | ✅ Free | ✅ Free | ✅ Free |
+
+### Recommendation for 40 Users:
+
+**Short-term (Current)**: GitHub Pages is fine for testing
+**Production**: 
+- **Netlify Free** - Good for start (commercial use allowed)
+- **Netlify Pro** - Recommended for reliability ($19/month = $0.48/user/month)
 
 **Note**: Your backend (Supabase) handles the main load. Frontend hosting is just for static files.
 
