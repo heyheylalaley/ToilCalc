@@ -1466,17 +1466,24 @@ function filterLogsByDate(logs, filterType) {
 // Render user view
 function renderUserView() {
   const balance = calculateBalance(currentLogs);
-  const monthHours = calculateMonthHours(currentLogs);
+  
+  // Calculate totals
+  const totalOvertime = currentLogs
+    .filter(log => log.type === 'overtime')
+    .reduce((sum, log) => sum + (parseFloat(log.creditedHours) || 0), 0);
+  const totalTimeOff = currentLogs
+    .filter(log => log.type === 'timeoff')
+    .reduce((sum, log) => sum + Math.abs(parseFloat(log.creditedHours) || 0), 0);
   
   document.getElementById('userBalance').textContent = balance.toFixed(1) + ' hrs';
   document.getElementById('userBalance').className = 'balance-value ' + 
     (balance > 0 ? 'positive' : balance < 0 ? 'negative' : 'zero');
   
   // Update statistics
-  const monthHoursEl = document.getElementById('userMonthHours');
-  const totalEntriesEl = document.getElementById('userTotalEntries');
-  if (monthHoursEl) monthHoursEl.textContent = monthHours.toFixed(1) + ' hrs';
-  if (totalEntriesEl) totalEntriesEl.textContent = currentLogs.length.toString();
+  const overtimeEl = document.getElementById('userTotalOvertime');
+  const timeOffEl = document.getElementById('userTotalTimeOff');
+  if (overtimeEl) overtimeEl.textContent = '+' + totalOvertime.toFixed(1) + ' hrs';
+  if (timeOffEl) timeOffEl.textContent = '-' + totalTimeOff.toFixed(1) + ' hrs';
   
   // Render stats chart
   renderStatsChart();
@@ -1602,9 +1609,10 @@ function renderStatsChart() {
     }
   });
   
-  // Find max value for scaling
-  const values = Object.values(dailyData).map(d => Math.max(Math.abs(d.net), 0.1));
-  const maxValue = Math.max(...values, 1);
+  // Find max value for scaling (consider both overtime and timeoff separately)
+  const maxOvertime = Math.max(...Object.values(dailyData).map(d => d.overtime), 1);
+  const maxTimeoff = Math.max(...Object.values(dailyData).map(d => d.timeoff), 1);
+  const maxValue = Math.max(maxOvertime, maxTimeoff, 1);
   
   // Calculate totals
   let totalOvertime = 0;
@@ -1627,14 +1635,30 @@ function renderStatsChart() {
     netEl.className = `stats-value ${netChange > 0 ? 'positive' : netChange < 0 ? 'negative' : ''}`;
   }
   
-  // Render bars
+  // Render stacked bars showing both overtime and time off
   const bars = Object.entries(dailyData).map(([date, data]) => {
-    const height = Math.max((Math.abs(data.net) / maxValue) * 100, 4);
-    const barClass = data.net > 0 ? 'positive' : data.net < 0 ? 'negative' : 'zero';
+    const overtimeHeight = Math.max((data.overtime / maxValue) * 100, 0);
+    const timeoffHeight = Math.max((data.timeoff / maxValue) * 100, 0);
     const dateObj = new Date(date);
-    const tooltip = `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${data.net >= 0 ? '+' : ''}${data.net.toFixed(1)} hrs`;
+    const dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     
-    return `<div class="stats-bar ${barClass}" style="height: ${height}%" data-tooltip="${tooltip}"></div>`;
+    let tooltipParts = [dateLabel];
+    if (data.overtime > 0) tooltipParts.push(`Overtime: +${data.overtime.toFixed(1)}h`);
+    if (data.timeoff > 0) tooltipParts.push(`Time Off: -${data.timeoff.toFixed(1)}h`);
+    if (data.overtime === 0 && data.timeoff === 0) tooltipParts.push('No entries');
+    const tooltip = tooltipParts.join(' | ');
+    
+    // Stacked bar: overtime (green) on top of time off (orange)
+    if (data.overtime > 0 || data.timeoff > 0) {
+      return `<div class="stats-bar-container" data-tooltip="${tooltip}">
+        ${data.overtime > 0 ? `<div class="stats-bar-segment positive" style="height: ${overtimeHeight}%"></div>` : ''}
+        ${data.timeoff > 0 ? `<div class="stats-bar-segment negative" style="height: ${timeoffHeight}%"></div>` : ''}
+      </div>`;
+    } else {
+      return `<div class="stats-bar-container" data-tooltip="${tooltip}">
+        <div class="stats-bar-segment zero" style="height: 4%"></div>
+      </div>`;
+    }
   }).join('');
   
   chartContainer.innerHTML = bars;
@@ -1760,17 +1784,24 @@ function renderAdminView() {
   // Render admin's personal balance
   const adminLogs = currentLogs.filter(log => log.userEmail === currentUser.email);
   const adminBalance = calculateBalance(adminLogs);
-  const adminMonthHours = calculateMonthHours(adminLogs);
+  
+  // Calculate totals for admin's personal logs
+  const totalOvertime = adminLogs
+    .filter(log => log.type === 'overtime')
+    .reduce((sum, log) => sum + (parseFloat(log.creditedHours) || 0), 0);
+  const totalTimeOff = adminLogs
+    .filter(log => log.type === 'timeoff')
+    .reduce((sum, log) => sum + Math.abs(parseFloat(log.creditedHours) || 0), 0);
   
   document.getElementById('adminBalance').textContent = adminBalance.toFixed(1) + ' hrs';
   document.getElementById('adminBalance').className = 'balance-value ' + 
     (adminBalance > 0 ? 'positive' : adminBalance < 0 ? 'negative' : 'zero');
   
   // Update statistics
-  const monthHoursEl = document.getElementById('adminMonthHours');
-  const totalEntriesEl = document.getElementById('adminTotalEntries');
-  if (monthHoursEl) monthHoursEl.textContent = adminMonthHours.toFixed(1) + ' hrs';
-  if (totalEntriesEl) totalEntriesEl.textContent = adminLogs.length.toString();
+  const overtimeEl = document.getElementById('adminTotalOvertime');
+  const timeOffEl = document.getElementById('adminTotalTimeOff');
+  if (overtimeEl) overtimeEl.textContent = '+' + totalOvertime.toFixed(1) + ' hrs';
+  if (timeOffEl) timeOffEl.textContent = '-' + totalTimeOff.toFixed(1) + ' hrs';
   
   if (document.getElementById('adminMultiplier')) {
     document.getElementById('adminMultiplier').textContent = currentMultiplier;
