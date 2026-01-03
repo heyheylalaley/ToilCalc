@@ -280,6 +280,12 @@ async function checkSupabaseSession() {
       const { data: { session: newSession }, error: sessionError } = await supabaseClient.auth.getSession();
       
       if (newSession && !sessionError && !currentUser) {
+        // Skip if email/password login is in progress
+        if (emailPasswordLoginInProgress) {
+          console.log('Email/password login in progress, skipping checkSupabaseSession processing');
+          return;
+        }
+        
         // Session is set, but user not loaded yet
         // Wait a bit for trigger to create user
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -313,6 +319,12 @@ async function checkSupabaseSession() {
       const { data: { session: finalSession }, error: finalError } = await supabaseClient.auth.getSession();
       
       if (finalSession && !finalError) {
+        // Skip if email/password login is in progress
+        if (emailPasswordLoginInProgress) {
+          console.log('Email/password login in progress, skipping checkSupabaseSession processing');
+          return;
+        }
+        
         // Normalize email for search
         const normalizedEmail = finalSession.user.email.toLowerCase().trim();
         // Find user with retry attempts
