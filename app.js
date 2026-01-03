@@ -264,11 +264,11 @@ async function checkSupabaseSession() {
       const { data: { session: newSession }, error: sessionError } = await supabaseClient.auth.getSession();
       
       if (newSession && !sessionError && !currentUser) {
-        // Сессия установлена, но пользователь еще не загружен
-        // Ждем немного, чтобы триггер успел создать пользователя
+        // Session is set, but user not loaded yet
+        // Wait a bit for trigger to create user
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Ищем пользователя с повторными попытками
+        // Find user with retry attempts
         const userData = await findUserByEmail(newSession.user.email);
         
         if (userData) {
