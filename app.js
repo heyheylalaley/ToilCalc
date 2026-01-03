@@ -1,6 +1,6 @@
 // Конфигурация - ЗАМЕНИТЕ НА СВОИ ЗНАЧЕНИЯ
 const CONFIG = {
-  GAS_API_URL: 'AKfycbwPN7R5be2PX35bbtPT8800UbkaYVo86UVJF9v_2qI2xUZrw1vMOCCWyedXB7L7jUFY',
+  GAS_API_URL: 'https://script.google.com/macros/s/AKfycbwPN7R5be2PX35bbtPT8800UbkaYVo86UVJF9v_2qI2xUZrw1vMOCCWyedXB7L7jUFY/exec',
   GOOGLE_CLIENT_ID: '821999196894-20d8semsbtdp3dcpu4qf2p1h0u4okb39.apps.googleusercontent.com'
 };
 
@@ -50,14 +50,13 @@ async function handleCredentialResponse(response) {
   showLoading();
   try {
     // Используем FormData для совместимости с Google Apps Script
+    // action передаём в URL, данные в FormData
     const formData = new FormData();
-    formData.append('action', 'login');
     formData.append('token', response.credential);
     
-    const res = await fetch(CONFIG.GAS_API_URL, {
+    const res = await fetch(`${CONFIG.GAS_API_URL}?action=login`, {
       method: 'POST',
       body: formData,
-      // Не указываем Content-Type, браузер установит его автоматически с boundary
       redirect: 'follow'
     });
     
@@ -417,7 +416,6 @@ async function handleAddLog(e) {
       : -factHours;
     
     const formData = new FormData();
-    formData.append('action', 'addLog');
     formData.append('userEmail', currentUser.email);
     formData.append('date', date);
     formData.append('type', type);
@@ -425,7 +423,7 @@ async function handleAddLog(e) {
     formData.append('creditedHours', creditedHours.toString());
     formData.append('comment', comment);
     
-    const res = await fetch(CONFIG.GAS_API_URL, {
+    const res = await fetch(`${CONFIG.GAS_API_URL}?action=addLog`, {
       method: 'POST',
       body: formData,
       redirect: 'follow'
@@ -509,10 +507,9 @@ async function handleUpdateMultiplier() {
   showLoading();
   try {
     const formData = new FormData();
-    formData.append('action', 'updateSettings');
     formData.append('overtimeMultiplier', multiplier.toString());
     
-    const res = await fetch(CONFIG.GAS_API_URL, {
+    const res = await fetch(`${CONFIG.GAS_API_URL}?action=updateSettings`, {
       method: 'POST',
       body: formData,
       redirect: 'follow'
