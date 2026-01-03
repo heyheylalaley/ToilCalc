@@ -128,8 +128,14 @@
 }
 
 [data-theme="dark"] .user-card .user-name,
-[data-theme="dark"] .user-card .user-email {
+[data-theme="dark"] .user-card .user-email,
+[data-theme="dark"] .user-card .user-info h3,
+[data-theme="dark"] .user-card .user-info p {
   color: var(--text-primary);
+}
+
+[data-theme="dark"] .user-card .user-balance-label {
+  color: var(--text-secondary);
 }
 
 [data-theme="dark"] .logs-table th {
