@@ -1027,18 +1027,18 @@ function setupEventListeners() {
     themeToggle.addEventListener('click', toggleTheme);
   }
   
-  // Quick add buttons
+  // Quick add buttons (user view)
   const quickAddButtons = document.querySelectorAll('.quick-add-btn:not(.quick-add-custom)');
   quickAddButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const hours = parseFloat(btn.dataset.hours);
       if (hours && currentUser) {
-        quickAddOvertime(hours);
+        quickAddOvertime(hours, 'user');
       }
     });
   });
   
-  // Quick add custom button - opens form
+  // Quick add custom button - opens form (user view)
   const quickAddCustomBtn = document.getElementById('quickAddCustomBtn');
   if (quickAddCustomBtn) {
     quickAddCustomBtn.addEventListener('click', () => {
@@ -1048,6 +1048,31 @@ function setupEventListeners() {
         addLogForm.classList.remove('hidden');
         addFormToggle.classList.add('hidden');
         document.getElementById('logHours')?.focus();
+      }
+    });
+  }
+  
+  // Quick add buttons (admin view)
+  const adminQuickAddButtons = document.querySelectorAll('.admin-quick-add-btn:not(.quick-add-custom)');
+  adminQuickAddButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const hours = parseFloat(btn.dataset.hours);
+      if (hours && currentUser) {
+        quickAddOvertime(hours, 'admin');
+      }
+    });
+  });
+  
+  // Quick add custom button - opens form (admin view)
+  const adminQuickAddCustomBtn = document.getElementById('adminQuickAddCustomBtn');
+  if (adminQuickAddCustomBtn) {
+    adminQuickAddCustomBtn.addEventListener('click', () => {
+      const adminAddFormToggle = document.getElementById('adminAddFormToggle');
+      const adminAddLogForm = document.getElementById('adminAddLogForm');
+      if (adminAddFormToggle && adminAddLogForm) {
+        adminAddLogForm.classList.remove('hidden');
+        adminAddFormToggle.classList.add('hidden');
+        document.getElementById('adminLogHours')?.focus();
       }
     });
   }
@@ -1614,13 +1639,14 @@ function renderUserView() {
 }
 
 // Quick add overtime entry
-async function quickAddOvertime(hours) {
+async function quickAddOvertime(hours, source = 'user') {
   if (!currentUser) return;
   
   const today = new Date().toISOString().split('T')[0];
   
-  // Get comment from input field
-  const commentInput = document.getElementById('quickAddComment');
+  // Get comment from input field (user or admin)
+  const commentInputId = source === 'admin' ? 'adminQuickAddComment' : 'quickAddComment';
+  const commentInput = document.getElementById(commentInputId);
   const comment = commentInput?.value.trim() || 'Quick add';
   
   // Optimistic update

@@ -177,8 +177,8 @@
               <span class="quick-add-hours">+2</span>
               <span class="quick-add-label">hours</span>
             </button>
-            <button class="quick-add-btn" data-hours="4" title="Add 4 hours overtime">
-              <span class="quick-add-hours">+4</span>
+            <button class="quick-add-btn" data-hours="3" title="Add 3 hours overtime">
+              <span class="quick-add-hours">+3</span>
               <span class="quick-add-label">hours</span>
             </button>
             <button class="quick-add-btn quick-add-custom" id="quickAddCustomBtn" title="Custom entry">
@@ -308,6 +308,32 @@
                 <div class="balance-stat-label">Total Entries</div>
                 <div class="balance-stat-value" id="adminTotalEntries">0</div>
               </div>
+            </div>
+          </div>
+
+          <!-- Quick Add Buttons for Admin -->
+          <div class="card quick-add-card" style="margin-top: 24px;">
+            <h3 class="quick-add-title">Quick Add Overtime</h3>
+            <div class="quick-add-comment-row">
+              <input type="text" id="adminQuickAddComment" class="quick-add-comment-input" placeholder="Comment (e.g., Project X, meeting)" maxlength="200">
+            </div>
+            <div class="quick-add-buttons">
+              <button class="admin-quick-add-btn" data-hours="1" title="Add 1 hour overtime">
+                <span class="quick-add-hours">+1</span>
+                <span class="quick-add-label">hour</span>
+              </button>
+              <button class="admin-quick-add-btn" data-hours="2" title="Add 2 hours overtime">
+                <span class="quick-add-hours">+2</span>
+                <span class="quick-add-label">hours</span>
+              </button>
+              <button class="admin-quick-add-btn" data-hours="3" title="Add 3 hours overtime">
+                <span class="quick-add-hours">+3</span>
+                <span class="quick-add-label">hours</span>
+              </button>
+              <button class="admin-quick-add-btn quick-add-custom" id="adminQuickAddCustomBtn" title="Custom entry">
+                <span class="quick-add-hours">...</span>
+                <span class="quick-add-label">custom</span>
+              </button>
             </div>
           </div>
 

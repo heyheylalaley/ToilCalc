@@ -161,12 +161,14 @@
   background: var(--border-hover);
 }
 
-[data-theme="dark"] .quick-add-btn {
+[data-theme="dark"] .quick-add-btn,
+[data-theme="dark"] .admin-quick-add-btn {
   background: rgba(16, 185, 129, 0.15);
   border-color: var(--success);
 }
 
-[data-theme="dark"] .quick-add-btn:hover {
+[data-theme="dark"] .quick-add-btn:hover,
+[data-theme="dark"] .admin-quick-add-btn:hover {
   background: var(--success);
 }
 
@@ -667,7 +669,8 @@ body {
   gap: 12px;
 }
 
-.quick-add-btn {
+.quick-add-btn,
+.admin-quick-add-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -680,18 +683,22 @@ body {
   transition: all 0.2s;
 }
 
-.quick-add-btn:hover {
+.quick-add-btn:hover,
+.admin-quick-add-btn:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   background: var(--success);
 }
 
 .quick-add-btn:hover .quick-add-hours,
-.quick-add-btn:hover .quick-add-label {
+.quick-add-btn:hover .quick-add-label,
+.admin-quick-add-btn:hover .quick-add-hours,
+.admin-quick-add-btn:hover .quick-add-label {
   color: white;
 }
 
-.quick-add-btn:active {
+.quick-add-btn:active,
+.admin-quick-add-btn:active {
   transform: translateY(0);
 }
 
