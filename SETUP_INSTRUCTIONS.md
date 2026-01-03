@@ -33,17 +33,28 @@
 5. Нажмите на него и скопируйте **Client Secret**
 6. Вставьте в Supabase Dashboard в поле **Client Secret**
 
-#### Настройка Redirect URL в Google Cloud Console:
+#### Настройка Redirect URL в Google Cloud Console (ВАЖНО!):
 
 1. В Google Cloud Console в настройках OAuth Client ID
-2. Добавьте в **Authorized redirect URIs**:
+2. В разделе **Authorized redirect URIs** нажмите **+ ADD URI**
+3. **ОБЯЗАТЕЛЬНО** добавьте Supabase callback URL:
    ```
    https://qwtwezxoodqfmdqpzkkl.supabase.co/auth/v1/callback
    ```
-3. Также добавьте ваш домен GitHub Pages (если используете):
+   ⚠️ Это критически важно! Без этого URL OAuth не будет работать.
+
+4. Также добавьте ваш домен GitHub Pages:
    ```
-   https://YOUR_USERNAME.github.io
+   https://heyheylalaley.github.io
    ```
+   (замените на ваш реальный домен, если другой)
+
+5. **Сохраните изменения** (кнопка Save внизу)
+
+**Важно**: 
+- URL должны быть точными, с `https://` и без слеша в конце
+- Изменения могут применяться с задержкой 1-2 минуты
+- Если видите ошибку `redirect_uri_mismatch`, см. файл `FIX_OAUTH_ERROR.md`
 
 ### 3. Проверить настройки проекта
 
