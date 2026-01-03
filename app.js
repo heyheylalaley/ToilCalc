@@ -39,7 +39,7 @@ function initializeGoogleSignIn() {
       
       google.accounts.id.renderButton(
         document.getElementById('googleSignInButton'),
-        { theme: 'outline', size: 'large', text: 'signin_with', locale: 'ru' }
+        { theme: 'outline', size: 'large', text: 'signin_with', locale: 'en' }
       );
     }
   };
@@ -71,8 +71,8 @@ async function handleCredentialResponse(response) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error('Ошибка парсинга JSON:', text);
-      throw new Error('Сервер вернул некорректный ответ. Проверьте настройки Google Apps Script.');
+      console.error('JSON parse error:', text);
+      throw new Error('Server returned invalid response. Check Google Apps Script settings.');
     }
     
     if (data.success) {
@@ -81,22 +81,22 @@ async function handleCredentialResponse(response) {
       showMainApp();
       loadData();
     } else {
-      alert('Ошибка авторизации: ' + (data.message || 'Неизвестная ошибка'));
+      alert('Authorization error: ' + (data.message || 'Unknown error'));
     }
   } catch (error) {
-    console.error('Ошибка авторизации:', error);
-    const errorMessage = error.message || 'Неизвестная ошибка';
-    alert(`Ошибка подключения к серверу:\n\n${errorMessage}\n\nПроверьте:\n1. Правильность URL в CONFIG.GAS_API_URL\n2. Что Google Apps Script развёрнут как Web App\n3. Что доступ установлен на "Anyone" или "Anyone with Google account"`);
+    console.error('Authorization error:', error);
+    const errorMessage = error.message || 'Unknown error';
+    alert(`Server connection error:\n\n${errorMessage}\n\nCheck:\n1. Correctness of URL in CONFIG.GAS_API_URL\n2. That Google Apps Script is deployed as Web App\n3. That access is set to "Anyone" or "Anyone with Google account"`);
   }
   hideLoading();
 }
 
-// Настройка обработчиков событий
+// Setup event listeners
 function setupEventListeners() {
-  // Выход
+  // Logout
   document.getElementById('logoutBtn').addEventListener('click', logout);
   
-  // Форма добавления записи
+  // User form
   document.getElementById('addFormToggle').addEventListener('click', () => {
     document.getElementById('addLogForm').classList.remove('hidden');
     document.getElementById('addFormToggle').classList.add('hidden');
@@ -108,28 +108,53 @@ function setupEventListeners() {
     resetForm();
   });
   
-  // Выбор типа записи
+  // Admin form
+  document.getElementById('adminAddFormToggle').addEventListener('click', () => {
+    document.getElementById('adminAddLogForm').classList.remove('hidden');
+    document.getElementById('adminAddFormToggle').classList.add('hidden');
+  });
+  
+  document.getElementById('adminCancelFormBtn').addEventListener('click', () => {
+    document.getElementById('adminAddLogForm').classList.add('hidden');
+    document.getElementById('adminAddFormToggle').classList.remove('hidden');
+    resetAdminForm();
+  });
+  
+  // Type selection
   document.querySelectorAll('.type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+      const form = btn.closest('form');
+      form.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       updateCreditedPreview();
     });
   });
   
-  // Поля формы
-  document.getElementById('logHours').addEventListener('input', updateCreditedPreview);
-  document.getElementById('logDate').valueAsDate = new Date();
+  // Form fields
+  const logHours = document.getElementById('logHours');
+  const adminLogHours = document.getElementById('adminLogHours');
+  if (logHours) logHours.addEventListener('input', updateCreditedPreview);
+  if (adminLogHours) adminLogHours.addEventListener('input', updateAdminCreditedPreview);
   
-  // Отправка формы
+  const logDate = document.getElementById('logDate');
+  const adminLogDate = document.getElementById('adminLogDate');
+  if (logDate) logDate.valueAsDate = new Date();
+  if (adminLogDate) adminLogDate.valueAsDate = new Date();
+  
+  // Form submission
   document.getElementById('addLogForm').addEventListener('submit', handleAddLog);
+  document.getElementById('adminAddLogForm').addEventListener('submit', handleAdminAddLog);
   
-  // Админские кнопки
-  document.getElementById('settingsBtn').addEventListener('click', handleUpdateMultiplier);
-  document.getElementById('exportBtn').addEventListener('click', handleExport);
+  // Admin buttons
+  const settingsBtn = document.getElementById('settingsBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const userExportBtn = document.getElementById('userExportBtn');
+  if (settingsBtn) settingsBtn.addEventListener('click', handleUpdateMultiplier);
+  if (exportBtn) exportBtn.addEventListener('click', handleAdminExport);
+  if (userExportBtn) userExportBtn.addEventListener('click', handleUserExport);
 }
 
-// Показать главное приложение
+// Show main app
 function showMainApp() {
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('mainApp').classList.remove('hidden');
@@ -138,13 +163,15 @@ function showMainApp() {
     document.getElementById('userView').classList.add('hidden');
     document.getElementById('adminView').classList.remove('hidden');
     document.getElementById('adminControls').classList.remove('hidden');
-    document.getElementById('headerTitle').textContent = 'Админ-панель';
+    document.getElementById('userExportBtn').classList.add('hidden');
+    document.getElementById('headerTitle').textContent = 'Admin Panel';
     document.getElementById('headerSubtitle').textContent = currentUser.name;
   } else {
     document.getElementById('userView').classList.remove('hidden');
     document.getElementById('adminView').classList.add('hidden');
     document.getElementById('adminControls').classList.add('hidden');
-    document.getElementById('headerTitle').textContent = 'Учёт переработок';
+    document.getElementById('userExportBtn').classList.remove('hidden');
+    document.getElementById('headerTitle').textContent = 'Overtime Tracker';
     document.getElementById('headerSubtitle').textContent = currentUser.name;
   }
 }
@@ -168,8 +195,8 @@ async function loadData() {
       renderUserView();
     }
   } catch (error) {
-    console.error('Ошибка загрузки данных:', error);
-    alert('Ошибка загрузки данных');
+    console.error('Data loading error:', error);
+    alert('Data loading error');
   }
   hideLoading();
 }
@@ -246,15 +273,27 @@ async function loadSettings() {
   }
 }
 
-// Расчёт баланса
+// Format date to DD-MM-YYYY
+function formatDate(dateString) {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+// Calculate balance
 function calculateBalance(logs) {
   return logs.reduce((sum, log) => sum + (parseFloat(log.creditedHours) || 0), 0);
 }
 
-// Рендер интерфейса пользователя
+// Render user view
 function renderUserView() {
   const balance = calculateBalance(currentLogs);
-  document.getElementById('userBalance').textContent = balance.toFixed(1) + ' ч';
+  document.getElementById('userBalance').textContent = balance.toFixed(1) + ' hrs';
   document.getElementById('userBalance').className = 'balance-value ' + 
     (balance > 0 ? 'positive' : balance < 0 ? 'negative' : 'zero');
   
@@ -265,11 +304,11 @@ function renderUserLogs() {
   const container = document.getElementById('userLogs');
   
   if (currentLogs.length === 0) {
-    container.innerHTML = '<div class="empty-state">Записей пока нет</div>';
+    container.innerHTML = '<div class="empty-state">No records yet</div>';
     return;
   }
   
-  // Сортировка по дате (новые сверху)
+  // Sort by date (newest first)
   const sortedLogs = [...currentLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
   
   container.innerHTML = sortedLogs.map(log => {
@@ -279,25 +318,36 @@ function renderUserLogs() {
         <div class="log-item-left">
           <div>
             <span class="log-badge ${log.type === 'overtime' ? 'badge-overtime' : 'badge-timeoff'}">
-              ${log.type === 'overtime' ? 'Переработка' : 'Отгул'}
+              ${log.type === 'overtime' ? 'Overtime' : 'Time Off'}
             </span>
-            <span class="log-date">${log.date}</span>
+            <span class="log-date">${formatDate(log.date)}</span>
           </div>
           <div class="log-details">
-            Фактически: <strong>${log.factHours} ч</strong>
+            Actual: <strong>${log.factHours} hrs</strong>
           </div>
           ${log.comment ? `<div class="log-comment">${escapeHtml(log.comment)}</div>` : ''}
         </div>
         <div class="log-credited ${credited > 0 ? 'positive' : 'negative'}">
-          ${credited > 0 ? '+' : ''}${credited} ч
+          ${credited > 0 ? '+' : ''}${credited} hrs
         </div>
       </div>
     `;
   }).join('');
 }
 
-// Рендер интерфейса админа
+// Render admin view
 function renderAdminView() {
+  // Render admin's personal balance
+  const adminLogs = currentLogs.filter(log => log.userEmail === currentUser.email);
+  const adminBalance = calculateBalance(adminLogs);
+  document.getElementById('adminBalance').textContent = adminBalance.toFixed(1) + ' hrs';
+  document.getElementById('adminBalance').className = 'balance-value ' + 
+    (adminBalance > 0 ? 'positive' : adminBalance < 0 ? 'negative' : 'zero');
+  
+  if (document.getElementById('adminMultiplier')) {
+    document.getElementById('adminMultiplier').textContent = currentMultiplier;
+  }
+  
   renderUsersList();
   renderAdminLogs();
 }
@@ -321,16 +371,16 @@ function renderUsersList() {
           </div>
           <div class="user-balance">
             <div class="user-balance-value ${balance > 0 ? 'positive' : balance < 0 ? 'negative' : 'zero'}">
-              ${balance.toFixed(1)} ч
+              ${balance.toFixed(1)} hrs
             </div>
-            <div class="user-balance-label">баланс</div>
+            <div class="user-balance-label">balance</div>
           </div>
         </div>
       </div>
     `;
   }).join('');
   
-  // Обработчики клика по карточкам пользователей
+  // Click handlers for user cards
   container.querySelectorAll('.user-card').forEach(card => {
     card.addEventListener('click', () => {
       const email = card.dataset.email;
@@ -342,10 +392,10 @@ function renderUsersList() {
         card.classList.add('selected');
         renderAdminLogs(email);
         const userName = currentUsers.find(u => u.email === email)?.name || email;
-        document.getElementById('historyTitle').textContent = `История: ${userName}`;
+        document.getElementById('historyTitle').textContent = `History: ${userName}`;
       } else {
         renderAdminLogs();
-        document.getElementById('historyTitle').textContent = 'Все записи';
+        document.getElementById('historyTitle').textContent = 'All Records';
       }
     });
   });
@@ -358,11 +408,11 @@ function renderAdminLogs(filterEmail = null) {
     ? currentLogs.filter(log => log.userEmail === filterEmail)
     : currentLogs;
   
-  // Сортировка по дате (новые сверху)
+  // Sort by date (newest first)
   logsToShow = [...logsToShow].sort((a, b) => new Date(b.date) - new Date(a.date));
   
   if (logsToShow.length === 0) {
-    container.innerHTML = '<tr><td colspan="7" class="empty-state">Записей нет</td></tr>';
+    container.innerHTML = '<tr><td colspan="7" class="empty-state">No records</td></tr>';
     return;
   }
   
@@ -372,11 +422,11 @@ function renderAdminLogs(filterEmail = null) {
     
     return `
       <tr>
-        <td>${log.date}</td>
+        <td>${formatDate(log.date)}</td>
         <td>${escapeHtml(userName)}</td>
         <td>
           <span class="table-badge ${log.type === 'overtime' ? 'badge-overtime' : 'badge-timeoff'}">
-            ${log.type === 'overtime' ? 'Переработка' : 'Отгул'}
+            ${log.type === 'overtime' ? 'Overtime' : 'Time Off'}
           </span>
         </td>
         <td class="text-right">${log.factHours}</td>
@@ -385,7 +435,7 @@ function renderAdminLogs(filterEmail = null) {
         </td>
         <td>${escapeHtml(log.comment || '')}</td>
         <td class="text-center">
-          <button class="table-action-btn" onclick="handleDeleteLog(${log.id})" title="Удалить">
+          <button class="table-action-btn" onclick="handleDeleteLog(${log.id})" title="Delete">
             🗑️
           </button>
         </td>
@@ -394,20 +444,44 @@ function renderAdminLogs(filterEmail = null) {
   }).join('');
 }
 
-// Добавление записи
+// Add log entry (user)
 async function handleAddLog(e) {
   e.preventDefault();
   
-  const type = document.querySelector('.type-btn.active').dataset.type;
+  const form = e.target;
+  const type = form.querySelector('.type-btn.active').dataset.type;
   const date = document.getElementById('logDate').value;
   const hours = parseFloat(document.getElementById('logHours').value);
   const comment = document.getElementById('logComment').value;
   
   if (!hours || hours <= 0) {
-    alert('Укажите корректное количество часов');
+    alert('Please enter a valid number of hours');
     return;
   }
   
+  await saveLogEntry(currentUser.email, date, type, hours, comment, form);
+}
+
+// Add log entry (admin)
+async function handleAdminAddLog(e) {
+  e.preventDefault();
+  
+  const form = e.target;
+  const type = form.querySelector('.type-btn.active').dataset.type;
+  const date = document.getElementById('adminLogDate').value;
+  const hours = parseFloat(document.getElementById('adminLogHours').value);
+  const comment = document.getElementById('adminLogComment').value;
+  
+  if (!hours || hours <= 0) {
+    alert('Please enter a valid number of hours');
+    return;
+  }
+  
+  await saveLogEntry(currentUser.email, date, type, hours, comment, form);
+}
+
+// Save log entry
+async function saveLogEntry(userEmail, date, type, hours, comment, form) {
   showLoading();
   try {
     const factHours = hours;
@@ -416,7 +490,7 @@ async function handleAddLog(e) {
       : -factHours;
     
     const formData = new FormData();
-    formData.append('userEmail', currentUser.email);
+    formData.append('userEmail', userEmail);
     formData.append('date', date);
     formData.append('type', type);
     formData.append('factHours', factHours.toString());
@@ -438,28 +512,34 @@ async function handleAddLog(e) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error('Ошибка парсинга JSON:', text);
-      throw new Error('Сервер вернул некорректный ответ');
+      console.error('JSON parse error:', text);
+      throw new Error('Server returned invalid response');
     }
     
     if (data.success) {
-      resetForm();
-      document.getElementById('addLogForm').classList.add('hidden');
-      document.getElementById('addFormToggle').classList.remove('hidden');
+      if (form.id === 'addLogForm') {
+        resetForm();
+        document.getElementById('addLogForm').classList.add('hidden');
+        document.getElementById('addFormToggle').classList.remove('hidden');
+      } else {
+        resetAdminForm();
+        document.getElementById('adminAddLogForm').classList.add('hidden');
+        document.getElementById('adminAddFormToggle').classList.remove('hidden');
+      }
       loadData();
     } else {
-      alert('Ошибка: ' + data.message);
+      alert('Error: ' + data.message);
     }
   } catch (error) {
-    console.error('Ошибка сохранения:', error);
-    alert('Ошибка сохранения: ' + error.message);
+    console.error('Save error:', error);
+    alert('Save error: ' + error.message);
   }
   hideLoading();
 }
 
-// Удаление записи
+// Delete log entry
 async function handleDeleteLog(logId) {
-  if (!confirm('Удалить запись?')) return;
+  if (!confirm('Delete entry?')) return;
   
   showLoading();
   try {
@@ -477,30 +557,30 @@ async function handleDeleteLog(logId) {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error('Ошибка парсинга JSON:', text);
-      throw new Error('Сервер вернул некорректный ответ');
+      console.error('JSON parse error:', text);
+      throw new Error('Server returned invalid response');
     }
     
     if (data.success) {
       loadData();
     } else {
-      alert('Ошибка: ' + data.message);
+      alert('Error: ' + data.message);
     }
   } catch (error) {
-    console.error('Ошибка удаления:', error);
-    alert('Ошибка удаления: ' + error.message);
+    console.error('Delete error:', error);
+    alert('Delete error: ' + error.message);
   }
   hideLoading();
 }
 
-// Обновление коэффициента
+// Update multiplier
 async function handleUpdateMultiplier() {
-  const newValue = prompt('Новый коэффициент переработки:', currentMultiplier);
+  const newValue = prompt('New overtime multiplier:', currentMultiplier);
   if (!newValue) return;
   
   const multiplier = parseFloat(newValue);
   if (isNaN(multiplier) || multiplier <= 0) {
-    alert('Некорректное значение');
+    alert('Invalid value');
     return;
   }
   
@@ -524,56 +604,121 @@ async function handleUpdateMultiplier() {
     try {
       data = JSON.parse(text);
     } catch (e) {
-      console.error('Ошибка парсинга JSON:', text);
-      throw new Error('Сервер вернул некорректный ответ');
+      console.error('JSON parse error:', text);
+      throw new Error('Server returned invalid response');
     }
     
     if (data.success) {
       currentMultiplier = multiplier;
       document.getElementById('multiplierDisplay').textContent = multiplier;
-      alert('Коэффициент обновлён');
+      if (document.getElementById('userMultiplier')) {
+        document.getElementById('userMultiplier').textContent = multiplier;
+      }
+      if (document.getElementById('adminMultiplier')) {
+        document.getElementById('adminMultiplier').textContent = multiplier;
+      }
+      alert('Multiplier updated');
     } else {
-      alert('Ошибка: ' + data.message);
+      alert('Error: ' + data.message);
     }
   } catch (error) {
-    console.error('Ошибка обновления:', error);
-    alert('Ошибка обновления: ' + error.message);
+    console.error('Update error:', error);
+    alert('Update error: ' + error.message);
   }
   hideLoading();
 }
 
-// Экспорт отчёта
-function handleExport() {
-  const month = prompt('Укажите месяц для экспорта (YYYY-MM):', new Date().toISOString().slice(0, 7));
-  if (!month) return;
+// Admin export (with user selection)
+function handleAdminExport() {
+  const userOptions = currentUsers.map(u => `${u.email} - ${u.name}`).join('\n');
+  const userInput = prompt(`Enter user email to export (leave empty for all users):\n\n${userOptions}`);
   
-  window.open(`${CONFIG.GAS_API_URL}?action=export&month=${month}`, '_blank');
+  let exportUrl = `${CONFIG.GAS_API_URL}?action=export`;
+  if (userInput && userInput.trim()) {
+    exportUrl += `&email=${encodeURIComponent(userInput.trim())}`;
+  }
+  
+  window.open(exportUrl, '_blank');
 }
 
-// Обновление превью начисленных часов
+// User export
+function handleUserExport() {
+  const exportUrl = `${CONFIG.GAS_API_URL}?action=export&email=${encodeURIComponent(currentUser.email)}`;
+  window.open(exportUrl, '_blank');
+}
+
+// Update credited hours preview (user form)
 function updateCreditedPreview() {
-  const type = document.querySelector('.type-btn.active')?.dataset.type;
-  const hours = parseFloat(document.getElementById('logHours').value);
+  const form = document.getElementById('addLogForm');
+  if (!form) return;
+  
+  const type = form.querySelector('.type-btn.active')?.dataset.type;
+  const hours = parseFloat(document.getElementById('logHours')?.value);
   const preview = document.getElementById('creditedPreview');
   
-  if (type === 'overtime' && hours && hours > 0) {
+  if (preview && type === 'overtime' && hours && hours > 0) {
     const credited = hours * currentMultiplier;
-    preview.textContent = `Начислено: ${credited.toFixed(1)} ч`;
+    preview.textContent = `Credited: ${credited.toFixed(1)} hrs`;
     preview.classList.remove('hidden');
-  } else {
+  } else if (preview) {
     preview.textContent = '';
     preview.classList.add('hidden');
   }
 }
 
-// Сброс формы
+// Update credited hours preview (admin form)
+function updateAdminCreditedPreview() {
+  const form = document.getElementById('adminAddLogForm');
+  if (!form) return;
+  
+  const type = form.querySelector('.type-btn.active')?.dataset.type;
+  const hours = parseFloat(document.getElementById('adminLogHours')?.value);
+  const preview = document.getElementById('adminCreditedPreview');
+  
+  if (preview && type === 'overtime' && hours && hours > 0) {
+    const credited = hours * currentMultiplier;
+    preview.textContent = `Credited: ${credited.toFixed(1)} hrs`;
+    preview.classList.remove('hidden');
+  } else if (preview) {
+    preview.textContent = '';
+    preview.classList.add('hidden');
+  }
+}
+
+// Reset user form
 function resetForm() {
-  document.getElementById('logDate').valueAsDate = new Date();
-  document.getElementById('logHours').value = '';
-  document.getElementById('logComment').value = '';
-  document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelector('.type-btn[data-type="overtime"]').classList.add('active');
+  const dateInput = document.getElementById('logDate');
+  const hoursInput = document.getElementById('logHours');
+  const commentInput = document.getElementById('logComment');
+  const form = document.getElementById('addLogForm');
+  
+  if (dateInput) dateInput.valueAsDate = new Date();
+  if (hoursInput) hoursInput.value = '';
+  if (commentInput) commentInput.value = '';
+  if (form) {
+    form.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+    const overtimeBtn = form.querySelector('.type-btn[data-type="overtime"]');
+    if (overtimeBtn) overtimeBtn.classList.add('active');
+  }
   updateCreditedPreview();
+}
+
+// Reset admin form
+function resetAdminForm() {
+  const dateInput = document.getElementById('adminLogDate');
+  const hoursInput = document.getElementById('adminLogHours');
+  const commentInput = document.getElementById('adminLogComment');
+  const form = document.getElementById('adminAddLogForm');
+  
+  if (dateInput) dateInput.valueAsDate = new Date();
+  if (hoursInput) hoursInput.value = '';
+  if (commentInput) commentInput.value = '';
+  if (form) {
+    form.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+    const overtimeBtn = form.querySelector('.type-btn[data-type="overtime"]');
+    if (overtimeBtn) overtimeBtn.classList.add('active');
+  }
+  updateAdminCreditedPreview();
 }
 
 // Выход

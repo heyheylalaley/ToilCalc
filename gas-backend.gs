@@ -344,31 +344,38 @@ function handleUpdateSettings(e) {
   }
 }
 
-// Экспорт отчёта
+// Export report
 function handleExport(e) {
-  const month = e.parameter.month; // YYYY-MM
+  const email = e.parameter.email; // Filter by user email (optional)
   
   try {
     const logs = getAllLogs();
-    const filteredLogs = month 
-      ? logs.filter(log => log.date.startsWith(month))
+    const filteredLogs = email 
+      ? logs.filter(log => log.userEmail === email)
       : logs;
     
-    // Создание CSV
-    let csv = 'Дата,Сотрудник,Email,Тип,Факт (ч),Начислено,Комментарий\n';
+    // Create CSV
+    let csv = 'Date,Employee,Email,Type,Actual (hrs),Credited,Comment\n';
     
     const users = getAllUsers();
     filteredLogs.forEach(log => {
       const user = users.find(u => u.email === log.userEmail);
       const userName = user ? user.name : log.userEmail;
       
-      csv += `"${log.date}","${userName}","${log.userEmail}","${log.type === 'overtime' ? 'Переработка' : 'Отгул'}","${log.factHours}","${log.creditedHours}","${log.comment}"\n`;
+      // Format date to DD-MM-YYYY
+      const dateObj = new Date(log.date);
+      const formattedDate = dateObj.getDate().toString().padStart(2, '0') + '-' + 
+                           (dateObj.getMonth() + 1).toString().padStart(2, '0') + '-' + 
+                           dateObj.getFullYear();
+      
+      csv += `"${formattedDate}","${userName}","${log.userEmail}","${log.type === 'overtime' ? 'Overtime' : 'Time Off'}","${log.factHours}","${log.creditedHours}","${log.comment || ''}"\n`;
     });
     
-    // Возврат CSV файла
+    // Return CSV file
+    const filename = email ? `overtime_report_${email.replace('@', '_at_')}.csv` : 'overtime_report_all.csv';
     return ContentService.createTextOutput(csv)
       .setMimeType(ContentService.MimeType.CSV)
-      .downloadAsFile(`overtime_report_${month || 'all'}.csv`);
+      .downloadAsFile(filename);
     
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({

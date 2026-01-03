@@ -1,23 +1,23 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Учёт переработок и отгулов</title>
+  <title>Overtime & Time Off Tracker</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
-  <!-- Экран авторизации -->
+  <!-- Login Screen -->
   <div id="loginScreen" class="login-screen">
     <div class="login-card">
       <div class="login-header">
         <div class="icon-clock">⏰</div>
-        <h1>Учёт переработок</h1>
-        <p>и отгулов (1.5x)</p>
+        <h1>Overtime Tracker</h1>
+        <p>and Time Off (1.5x)</p>
       </div>
       <div id="googleSignInButton" class="google-signin-container"></div>
-      <p class="login-hint">Войдите с помощью корпоративного Google аккаунта</p>
+      <p class="login-hint">Sign in with your corporate Google account</p>
     </div>
   </div>
 
@@ -36,14 +36,17 @@
         <div class="header-actions">
           <div id="adminControls" class="admin-controls hidden">
             <button id="settingsBtn" class="btn btn-secondary">
-              <span>⚙️</span> Коэфф: <span id="multiplierDisplay">1.5</span>x
+              <span>⚙️</span> Multiplier: <span id="multiplierDisplay">1.5</span>x
             </button>
             <button id="exportBtn" class="btn btn-success">
-              <span>📥</span> Экспорт
+              <span>📥</span> Export
             </button>
           </div>
+          <button id="userExportBtn" class="btn btn-success hidden">
+            <span>📥</span> Export
+          </button>
           <button id="logoutBtn" class="btn btn-secondary">
-            <span>🚪</span> Выход
+            <span>🚪</span> Logout
           </button>
         </div>
       </div>
@@ -52,95 +55,149 @@
     <!-- Контент для сотрудника -->
     <div id="userView" class="user-view hidden">
       <div class="container">
-        <!-- Баланс -->
+        <!-- Balance -->
         <div class="balance-card">
-          <p class="balance-label">Ваш текущий баланс</p>
-          <p id="userBalance" class="balance-value">0.0 ч</p>
-          <p class="balance-multiplier">Коэффициент переработки: <span id="userMultiplier">1.5</span>x</p>
+          <p class="balance-label">Your Current Balance</p>
+          <p id="userBalance" class="balance-value">0.0 hrs</p>
+          <p class="balance-multiplier">Overtime Multiplier: <span id="userMultiplier">1.5</span>x</p>
         </div>
 
-        <!-- Форма добавления -->
+        <!-- Add Form -->
         <div class="card">
           <div id="addFormToggle" class="add-form-toggle">
             <button class="btn btn-primary btn-large">
-              <span>➕</span> Добавить запись
+              <span>➕</span> Add Entry
             </button>
           </div>
           <form id="addLogForm" class="add-log-form hidden">
-            <h3>Новая запись</h3>
+            <h3>New Entry</h3>
             
             <div class="form-group">
-              <label>Тип</label>
+              <label>Type</label>
               <div class="type-selector">
                 <button type="button" class="type-btn active" data-type="overtime">
-                  Переработка
+                  Overtime
                 </button>
                 <button type="button" class="type-btn" data-type="timeoff">
-                  Отгул
+                  Time Off
                 </button>
               </div>
             </div>
 
             <div class="form-group">
-              <label for="logDate">Дата</label>
+              <label for="logDate">Date</label>
               <input type="date" id="logDate" required>
             </div>
 
             <div class="form-group">
-              <label for="logHours">Часы</label>
-              <input type="number" id="logHours" step="0.25" min="0.25" required placeholder="Например: 4.5">
+              <label for="logHours">Hours</label>
+              <input type="number" id="logHours" step="0.25" min="0.25" required placeholder="e.g., 4.5">
               <p id="creditedPreview" class="credited-preview"></p>
             </div>
 
             <div class="form-group">
-              <label for="logComment">Комментарий</label>
-              <input type="text" id="logComment" placeholder="Например: Проект X, срочная задача">
+              <label for="logComment">Comment</label>
+              <input type="text" id="logComment" placeholder="e.g., Project X, urgent task">
             </div>
 
             <div class="form-actions">
-              <button type="submit" class="btn btn-primary">Сохранить</button>
-              <button type="button" id="cancelFormBtn" class="btn btn-secondary">Отмена</button>
+              <button type="submit" class="btn btn-primary">Save</button>
+              <button type="button" id="cancelFormBtn" class="btn btn-secondary">Cancel</button>
             </div>
           </form>
         </div>
 
-        <!-- История -->
+        <!-- History -->
         <div class="card">
           <h2 class="card-title">
-            <span>📅</span> Ваша история
+            <span>📅</span> Your History
           </h2>
           <div id="userLogs" class="logs-list"></div>
         </div>
       </div>
     </div>
 
-    <!-- Контент для админа -->
+    <!-- Admin View -->
     <div id="adminView" class="admin-view hidden">
       <div class="container">
-        <!-- Список сотрудников -->
+        <!-- Admin Personal Section -->
+        <div id="adminPersonalSection" class="card">
+          <h2 class="card-title">
+            <span>👤</span> My Account
+          </h2>
+          <div class="balance-card" style="margin-bottom: 24px;">
+            <p class="balance-label">My Current Balance</p>
+            <p id="adminBalance" class="balance-value">0.0 hrs</p>
+            <p class="balance-multiplier">Overtime Multiplier: <span id="adminMultiplier">1.5</span>x</p>
+          </div>
+          
+          <div id="adminAddFormToggle" class="add-form-toggle">
+            <button class="btn btn-primary btn-large">
+              <span>➕</span> Add Entry
+            </button>
+          </div>
+          <form id="adminAddLogForm" class="add-log-form hidden">
+            <h3>New Entry</h3>
+            
+            <div class="form-group">
+              <label>Type</label>
+              <div class="type-selector">
+                <button type="button" class="type-btn active" data-type="overtime">
+                  Overtime
+                </button>
+                <button type="button" class="type-btn" data-type="timeoff">
+                  Time Off
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="adminLogDate">Date</label>
+              <input type="date" id="adminLogDate" required>
+            </div>
+
+            <div class="form-group">
+              <label for="adminLogHours">Hours</label>
+              <input type="number" id="adminLogHours" step="0.25" min="0.25" required placeholder="e.g., 4.5">
+              <p id="adminCreditedPreview" class="credited-preview"></p>
+            </div>
+
+            <div class="form-group">
+              <label for="adminLogComment">Comment</label>
+              <input type="text" id="adminLogComment" placeholder="e.g., Project X, urgent task">
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save</button>
+              <button type="button" id="adminCancelFormBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Employees List -->
         <div class="card">
           <h2 class="card-title">
-            <span>👥</span> Сотрудники
+            <span>👥</span> Employees
           </h2>
           <div id="usersList" class="users-list"></div>
         </div>
 
-        <!-- История -->
+        <!-- History -->
         <div class="card">
           <h2 class="card-title">
-            <span>📋</span> <span id="historyTitle">Все записи</span>
+            <span>📋</span> <span id="historyTitle">All Records</span>
           </h2>
           <div id="adminLogs" class="logs-table-container">
             <table class="logs-table">
               <thead>
                 <tr>
-                  <th>Дата</th>
-                  <th>Сотрудник</th>
-                  <th>Тип</th>
-                  <th class="text-right">Факт (ч)</th>
-                  <th class="text-right">Начислено</th>
-                  <th>Комментарий</th>
-                  <th class="text-center">Действия</th>
+                  <th>Date</th>
+                  <th>Employee</th>
+                  <th>Type</th>
+                  <th class="text-right">Actual (hrs)</th>
+                  <th class="text-right">Credited</th>
+                  <th>Comment</th>
+                  <th class="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody id="adminLogsBody"></tbody>
