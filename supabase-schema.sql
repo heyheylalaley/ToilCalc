@@ -45,6 +45,10 @@ ALTER TABLE logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
 -- Политики безопасности для таблицы users
+-- Удаляем существующие политики перед созданием новых
+DROP POLICY IF EXISTS "Anyone can read users" ON users;
+DROP POLICY IF EXISTS "Admins can manage users" ON users;
+
 -- Все могут читать пользователей (для отображения списка)
 CREATE POLICY "Anyone can read users" ON users
   FOR SELECT USING (true);
@@ -60,6 +64,11 @@ CREATE POLICY "Admins can manage users" ON users
   );
 
 -- Политики безопасности для таблицы logs
+-- Удаляем существующие политики перед созданием новых
+DROP POLICY IF EXISTS "Users can read own logs" ON logs;
+DROP POLICY IF EXISTS "Users can insert own logs" ON logs;
+DROP POLICY IF EXISTS "Admins can delete logs" ON logs;
+
 -- Пользователи могут читать свои логи
 CREATE POLICY "Users can read own logs" ON logs
   FOR SELECT USING (
@@ -93,6 +102,10 @@ CREATE POLICY "Admins can delete logs" ON logs
   );
 
 -- Политики безопасности для таблицы settings
+-- Удаляем существующие политики перед созданием новых
+DROP POLICY IF EXISTS "Anyone can read settings" ON settings;
+DROP POLICY IF EXISTS "Admins can update settings" ON settings;
+
 -- Все могут читать настройки
 CREATE POLICY "Anyone can read settings" ON settings
   FOR SELECT USING (true);
@@ -116,12 +129,14 @@ BEGIN
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
     'user'
-  );
+  )
+  ON CONFLICT (email) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Триггер для автоматического создания пользователя
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

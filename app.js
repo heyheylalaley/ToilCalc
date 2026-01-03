@@ -158,10 +158,12 @@ async function handleGoogleSignIn() {
   showLoading();
   try {
     // Используем Google OAuth через Supabase
+    // Используем явный URL вместо window.location.origin для избежания проблем с парсингом
+    const redirectUrl = 'https://heyheylalaley.github.io';
     const { data, error } = await supabaseClient.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: redirectUrl,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',

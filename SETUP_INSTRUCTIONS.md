@@ -61,6 +61,9 @@
 В Supabase Dashboard → Settings → API убедитесь, что:
 - **Project URL**: `https://qwtwezxoodqfmdqpzkkl.supabase.co` ✅
 - **anon public key**: `sb_publishable_iW0DJWq84mfMA30kA_HDOg_Fx99JPKU` ✅
+- **Site URL**: `https://heyheylalaley.github.io` ⚠️ **ВАЖНО!**
+  
+  **Site URL** должен совпадать с доменом вашего приложения. Если используете GitHub Pages, укажите ваш домен. Если видите редирект на localhost:3000, см. файл `FIX_REDIRECT_URL.md`
 
 ### 4. Добавить начальных пользователей
 
