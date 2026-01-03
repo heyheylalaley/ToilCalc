@@ -11,6 +11,7 @@ let currentUsers = [];
 let currentMultiplier = 1.5;
 let deleteLogId = null; // For delete modal
 let filteredLogs = []; // For search functionality
+let currentDateFilter = 'all'; // Current date filter (all, today, week, month)
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', () => {
@@ -192,6 +193,36 @@ function setupEventListeners() {
       const selectedCard = document.querySelector('.user-card.selected');
       const selectedEmail = selectedCard ? selectedCard.dataset.email : null;
       filterAdminLogs(e.target.value, selectedEmail);
+    });
+  }
+  
+  // Date filters - user view
+  const userDateFilters = document.getElementById('userDateFilters');
+  if (userDateFilters) {
+    userDateFilters.querySelectorAll('.date-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        userDateFilters.querySelectorAll('.date-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentDateFilter = btn.dataset.filter;
+        const searchInput = document.getElementById('userSearchInput');
+        filterUserLogs(searchInput ? searchInput.value : '');
+      });
+    });
+  }
+  
+  // Date filters - admin view
+  const adminDateFilters = document.getElementById('adminDateFilters');
+  if (adminDateFilters) {
+    adminDateFilters.querySelectorAll('.date-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        adminDateFilters.querySelectorAll('.date-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentDateFilter = btn.dataset.filter;
+        const selectedCard = document.querySelector('.user-card.selected');
+        const selectedEmail = selectedCard ? selectedCard.dataset.email : null;
+        const searchInput = document.getElementById('adminSearchInput');
+        filterAdminLogs(searchInput ? searchInput.value : '', selectedEmail);
+      });
     });
   }
   
@@ -482,27 +513,90 @@ function calculateBalance(logs) {
   return logs.reduce((sum, log) => sum + (parseFloat(log.creditedHours) || 0), 0);
 }
 
+// Calculate hours for current month
+function calculateMonthHours(logs) {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  return logs
+    .filter(log => {
+      const logDate = new Date(log.date);
+      return logDate.getMonth() === currentMonth && logDate.getFullYear() === currentYear;
+    })
+    .reduce((sum, log) => sum + Math.abs(parseFloat(log.creditedHours) || 0), 0);
+}
+
+// Filter logs by date range
+function filterLogsByDate(logs, filterType) {
+  if (filterType === 'all') return logs;
+  
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+  
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  
+  const startOfWeek = new Date(today);
+  const dayOfWeek = startOfWeek.getDay();
+  const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
+  startOfWeek.setDate(diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  return logs.filter(log => {
+    const logDate = new Date(log.date);
+    logDate.setHours(0, 0, 0, 0);
+    
+    switch (filterType) {
+      case 'today':
+        return logDate.getTime() === today.getTime();
+      case 'week':
+        return logDate.getTime() >= startOfWeek.getTime() && logDate.getTime() <= now.getTime();
+      case 'month':
+        return logDate.getTime() >= startOfMonth.getTime() && logDate.getTime() <= now.getTime();
+      default:
+        return true;
+    }
+  });
+}
+
 // Render user view
 function renderUserView() {
   const balance = calculateBalance(currentLogs);
+  const monthHours = calculateMonthHours(currentLogs);
+  
   document.getElementById('userBalance').textContent = balance.toFixed(1) + ' hrs';
   document.getElementById('userBalance').className = 'balance-value ' + 
     (balance > 0 ? 'positive' : balance < 0 ? 'negative' : 'zero');
   
+  // Update statistics
+  const monthHoursEl = document.getElementById('userMonthHours');
+  const totalEntriesEl = document.getElementById('userTotalEntries');
+  if (monthHoursEl) monthHoursEl.textContent = monthHours.toFixed(1) + ' hrs';
+  if (totalEntriesEl) totalEntriesEl.textContent = currentLogs.length.toString();
+  
   // Reset search and render
   const searchInput = document.getElementById('userSearchInput');
   if (searchInput) searchInput.value = '';
-  filteredLogs = [...currentLogs];
+  
+  // Apply date filter
+  filteredLogs = filterLogsByDate(currentLogs, currentDateFilter);
   renderUserLogs();
 }
 
 // Filter user logs
 function filterUserLogs(searchTerm) {
+  // First apply date filter
+  let logsToFilter = filterLogsByDate(currentLogs, currentDateFilter);
+  
+  // Then apply search filter if any
   if (!searchTerm || searchTerm.trim() === '') {
-    filteredLogs = [...currentLogs];
+    filteredLogs = logsToFilter;
   } else {
     const term = searchTerm.toLowerCase();
-    filteredLogs = currentLogs.filter(log => 
+    filteredLogs = logsToFilter.filter(log => 
       (log.comment && log.comment.toLowerCase().includes(term)) ||
       formatDate(log.date).toLowerCase().includes(term)
     );
@@ -514,9 +608,23 @@ function renderUserLogs() {
   const container = document.getElementById('userLogs');
   
   if (filteredLogs.length === 0) {
-    container.innerHTML = currentLogs.length === 0 
-      ? '<div class="empty-state">Нет записей</div>'
-      : '<div class="empty-state">Ничего не найдено</div>';
+    if (currentLogs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📝</div>
+          <div class="empty-state-title">Нет записей</div>
+          <div class="empty-state-description">Начните добавлять переработки и отгулы, чтобы отслеживать баланс</div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🔍</div>
+          <div class="empty-state-title">Ничего не найдено</div>
+          <div class="empty-state-description">Попробуйте изменить фильтры или поисковый запрос</div>
+        </div>
+      `;
+    }
     return;
   }
   
@@ -572,9 +680,17 @@ function renderAdminView() {
   // Render admin's personal balance
   const adminLogs = currentLogs.filter(log => log.userEmail === currentUser.email);
   const adminBalance = calculateBalance(adminLogs);
+  const adminMonthHours = calculateMonthHours(adminLogs);
+  
   document.getElementById('adminBalance').textContent = adminBalance.toFixed(1) + ' hrs';
   document.getElementById('adminBalance').className = 'balance-value ' + 
     (adminBalance > 0 ? 'positive' : adminBalance < 0 ? 'negative' : 'zero');
+  
+  // Update statistics
+  const monthHoursEl = document.getElementById('adminMonthHours');
+  const totalEntriesEl = document.getElementById('adminTotalEntries');
+  if (monthHoursEl) monthHoursEl.textContent = adminMonthHours.toFixed(1) + ' hrs';
+  if (totalEntriesEl) totalEntriesEl.textContent = adminLogs.length.toString();
   
   if (document.getElementById('adminMultiplier')) {
     document.getElementById('adminMultiplier').textContent = currentMultiplier;
@@ -590,7 +706,9 @@ function renderAdminView() {
   // Reset search and render
   const searchInput = document.getElementById('adminSearchInput');
   if (searchInput) searchInput.value = '';
-  filteredLogs = [...currentLogs];
+  
+  // Apply date filter
+  filteredLogs = filterLogsByDate(currentLogs, currentDateFilter);
   renderUsersList();
   renderAdminLogs();
 }
@@ -601,6 +719,9 @@ function filterAdminLogs(searchTerm, selectedEmail = null) {
   let logsToFilter = selectedEmail 
     ? currentLogs.filter(log => log.userEmail === selectedEmail)
     : currentLogs;
+  
+  // Apply date filter
+  logsToFilter = filterLogsByDate(logsToFilter, currentDateFilter);
   
   // Then apply search filter if any
   if (searchTerm && searchTerm.trim() !== '') {
@@ -686,7 +807,17 @@ function renderAdminLogs() {
   });
   
   if (logsToShow.length === 0) {
-    container.innerHTML = '<tr><td colspan="7" class="empty-state">Нет записей</td></tr>';
+    const allLogsCount = currentLogs.length;
+    container.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-state">
+          ${allLogsCount === 0 
+            ? '<div class="empty-state-icon">📋</div><div class="empty-state-title">Нет записей</div><div class="empty-state-description">Записи о переработках и отгулах появятся здесь</div>'
+            : '<div class="empty-state-icon">🔍</div><div class="empty-state-title">Ничего не найдено</div><div class="empty-state-description">Попробуйте изменить фильтры или поисковый запрос</div>'
+          }
+        </td>
+      </tr>
+    `;
     return;
   }
   
@@ -761,7 +892,12 @@ async function handleAddLog(e) {
   }
   
   if (!hours || hours <= 0) {
-    showToast('Пожалуйста, введите корректное количество часов', 'warning');
+    showToast('Пожалуйста, введите корректное количество часов (минимум 0.25)', 'warning');
+    return;
+  }
+  
+  if (hours > 24) {
+    showToast('Количество часов не может превышать 24 часа в день', 'warning');
     return;
   }
   
@@ -801,7 +937,12 @@ async function handleAdminAddLog(e) {
   }
   
   if (!hours || hours <= 0) {
-    showToast('Пожалуйста, введите корректное количество часов', 'warning');
+    showToast('Пожалуйста, введите корректное количество часов (минимум 0.25)', 'warning');
+    return;
+  }
+  
+  if (hours > 24) {
+    showToast('Количество часов не может превышать 24 часа в день', 'warning');
     return;
   }
   

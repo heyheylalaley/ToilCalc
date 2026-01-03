@@ -60,6 +60,16 @@
           <p class="balance-label">Your Current Balance</p>
           <p id="userBalance" class="balance-value">0.0 hrs</p>
           <p class="balance-multiplier">Overtime Multiplier: <span id="userMultiplier">1.5</span>x</p>
+          <div class="balance-stats">
+            <div class="balance-stat-item">
+              <div class="balance-stat-label">This Month</div>
+              <div class="balance-stat-value" id="userMonthHours">0.0 hrs</div>
+            </div>
+            <div class="balance-stat-item">
+              <div class="balance-stat-label">Total Entries</div>
+              <div class="balance-stat-value" id="userTotalEntries">0</div>
+            </div>
+          </div>
         </div>
 
         <!-- Add Form -->
@@ -91,13 +101,14 @@
 
             <div class="form-group">
               <label for="logHours">Hours</label>
-              <input type="number" id="logHours" step="0.25" min="0.25" required placeholder="e.g., 4.5">
+              <input type="number" id="logHours" step="0.25" min="0.25" max="24" required placeholder="e.g., 4.5" title="Enter hours worked (0.25 to 24)">
               <p id="creditedPreview" class="credited-preview"></p>
+              <small style="color: var(--gray-500); font-size: 12px; margin-top: 4px; display: block;">Minimum: 0.25 hours (15 min)</small>
             </div>
 
             <div class="form-group">
-              <label for="logComment">Comment</label>
-              <input type="text" id="logComment" placeholder="e.g., Project X, urgent task">
+              <label for="logComment">Comment <span style="color: var(--gray-400); font-weight: normal;">(optional)</span></label>
+              <input type="text" id="logComment" placeholder="e.g., Project X, urgent task" maxlength="200">
             </div>
 
             <div class="form-group" id="approvedByGroup" style="display: none;">
@@ -123,7 +134,15 @@
             </button>
           </div>
           <div class="search-container">
-            <input type="text" id="userSearchInput" class="search-input" placeholder="Поиск по комментариям...">
+            <div class="search-wrapper">
+              <input type="text" id="userSearchInput" class="search-input" placeholder="Поиск по комментариям...">
+            </div>
+          </div>
+          <div class="date-filters" id="userDateFilters">
+            <button class="date-filter-btn" data-filter="all">All</button>
+            <button class="date-filter-btn" data-filter="today">Today</button>
+            <button class="date-filter-btn" data-filter="week">This Week</button>
+            <button class="date-filter-btn" data-filter="month">This Month</button>
           </div>
           <div id="userLogs" class="logs-list"></div>
         </div>
@@ -142,6 +161,16 @@
             <p class="balance-label">My Current Balance</p>
             <p id="adminBalance" class="balance-value">0.0 hrs</p>
             <p class="balance-multiplier">Overtime Multiplier: <span id="adminMultiplier">1.5</span>x</p>
+            <div class="balance-stats">
+              <div class="balance-stat-item">
+                <div class="balance-stat-label">This Month</div>
+                <div class="balance-stat-value" id="adminMonthHours">0.0 hrs</div>
+              </div>
+              <div class="balance-stat-item">
+                <div class="balance-stat-label">Total Entries</div>
+                <div class="balance-stat-value" id="adminTotalEntries">0</div>
+              </div>
+            </div>
           </div>
           
           <div id="adminAddFormToggle" class="add-form-toggle">
@@ -178,13 +207,14 @@
 
             <div class="form-group">
               <label for="adminLogHours">Hours</label>
-              <input type="number" id="adminLogHours" step="0.25" min="0.25" required placeholder="e.g., 4.5">
+              <input type="number" id="adminLogHours" step="0.25" min="0.25" max="24" required placeholder="e.g., 4.5" title="Enter hours worked (0.25 to 24)">
               <p id="adminCreditedPreview" class="credited-preview"></p>
+              <small style="color: var(--gray-500); font-size: 12px; margin-top: 4px; display: block;">Minimum: 0.25 hours (15 min)</small>
             </div>
 
             <div class="form-group">
-              <label for="adminLogComment">Comment</label>
-              <input type="text" id="adminLogComment" placeholder="e.g., Project X, urgent task">
+              <label for="adminLogComment">Comment <span style="color: var(--gray-400); font-weight: normal;">(optional)</span></label>
+              <input type="text" id="adminLogComment" placeholder="e.g., Project X, urgent task" maxlength="200">
             </div>
 
             <div class="form-group" id="adminApprovedByGroup" style="display: none;">
@@ -218,7 +248,15 @@
             </button>
           </div>
           <div class="search-container">
-            <input type="text" id="adminSearchInput" class="search-input" placeholder="Поиск по сотруднику, комментарию...">
+            <div class="search-wrapper">
+              <input type="text" id="adminSearchInput" class="search-input" placeholder="Поиск по сотруднику, комментарию...">
+            </div>
+          </div>
+          <div class="date-filters" id="adminDateFilters">
+            <button class="date-filter-btn active" data-filter="all">All</button>
+            <button class="date-filter-btn" data-filter="today">Today</button>
+            <button class="date-filter-btn" data-filter="week">This Week</button>
+            <button class="date-filter-btn" data-filter="month">This Month</button>
           </div>
           <div id="adminLogs" class="logs-table-container">
             <table class="logs-table">
