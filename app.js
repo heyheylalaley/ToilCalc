@@ -31,6 +31,7 @@ let sortOrder = 'desc'; // Sort order: 'desc' (newest first) or 'asc' (oldest fi
 let isCheckingSession = false; // Session check flag
 let isLoggingIn = false; // Login process flag
 let sessionCheckTimeout = null; // Session check timeout
+let emailPasswordLoginInProgress = false; // Flag to track email/password login
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -138,10 +139,33 @@ function setupAuthListener() {
         return;
       }
       
-      // Check if main app is already shown (means handleEmailLogin already processed)
-      const mainApp = document.getElementById('mainApp');
-      if (mainApp && !mainApp.classList.contains('hidden')) {
-        console.log('Main app already shown, skipping onAuthStateChange toast');
+      // Skip showing toast if email/password login is in progress (it will show its own message)
+      if (emailPasswordLoginInProgress) {
+        console.log('Email/password login in progress, skipping onAuthStateChange toast');
+        // Still process the login, just don't show duplicate toast
+        try {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          const normalizedEmail = session.user.email.toLowerCase().trim();
+          const userData = await findUserByEmail(normalizedEmail);
+          if (userData) {
+            currentUser = {
+              id: userData.id,
+              name: userData.name,
+              email: userData.email,
+              role: userData.role
+            };
+            localStorage.setItem('user', JSON.stringify(currentUser));
+            if (document.getElementById('mainApp').classList.contains('hidden')) {
+              showMainApp();
+              loadData();
+            }
+            if (window.location.hash) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+        } catch (error) {
+          console.error('Error in onAuthStateChange (email/password login):', error);
+        }
         return;
       }
       
