@@ -34,7 +34,7 @@ let sessionCheckTimeout = null; // Session check timeout
 let emailPasswordLoginInProgress = false; // Flag to track email/password login
 
 // Undo delete state
-let pendingDelete = null; // { logId, logData, timeout }
+// Removed pendingDelete - now using immediate deletion with undo via re-insert
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -727,6 +727,20 @@ async function handleEmailLogin(e) {
     loginButton.textContent = 'Signing in...';
   }
   
+  // Safety timeout - if login takes more than 15 seconds, reset state
+  const safetyTimeout = setTimeout(() => {
+    console.warn('Login timeout - resetting state');
+    isLoggingIn = false;
+    emailPasswordLoginInProgress = false;
+    hideLoading();
+    const btn = document.querySelector('#emailLoginForm button[type="submit"]');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+    showToast('Login timed out. Please try again.', 'warning');
+  }, 15000);
+  
   try {
     // Sign in with email/password
     const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
@@ -869,6 +883,13 @@ async function handleEmailLogin(e) {
             window.history.replaceState({}, document.title, window.location.pathname);
           }
           return;
+        } else {
+          // User not found in database after all attempts - this shouldn't happen
+          console.error('User authenticated but not found in database');
+          showToast('Account error. Please contact administrator or try again.', 'error', 'Login Error');
+          // Sign out since we can't complete login properly
+          await supabaseClient.auth.signOut();
+          return;
         }
       }
     }
@@ -884,16 +905,18 @@ async function handleEmailLogin(e) {
     }
     showToast(errorMessage, 'error', 'Login Error');
   } finally {
-    // Make sure flags are reset and UI is updated
-    if (isLoggingIn) {
-      isLoggingIn = false;
-      hideLoading();
-      
-      const loginButton = document.querySelector('#emailLoginForm button[type="submit"]');
-      if (loginButton) {
-        loginButton.disabled = false;
-        loginButton.textContent = 'Sign In';
-      }
+    // Clear safety timeout
+    clearTimeout(safetyTimeout);
+    
+    // ALWAYS reset all flags and UI state
+    isLoggingIn = false;
+    emailPasswordLoginInProgress = false;
+    hideLoading();
+    
+    const loginButton = document.querySelector('#emailLoginForm button[type="submit"]');
+    if (loginButton) {
+      loginButton.disabled = false;
+      loginButton.textContent = 'Sign In';
     }
   }
 }
@@ -2281,14 +2304,8 @@ async function saveLogEntry(userEmail, date, type, hours, comment, approvedBy, f
   }
 }
 
-// Delete log entry with undo support
+// Delete log entry - immediate deletion with undo option
 async function handleDeleteLog(logId) {
-  // Cancel any pending delete
-  if (pendingDelete && pendingDelete.timeout) {
-    clearTimeout(pendingDelete.timeout);
-    pendingDelete = null;
-  }
-  
   // Find log to delete
   const logToDelete = currentLogs.find(log => log.id == logId);
   if (!logToDelete) return;
@@ -2303,66 +2320,85 @@ async function handleDeleteLog(logId) {
     renderUserView();
   }
   
-  // Show toast with undo button
-  const undoHandler = () => {
-    // Cancel the pending delete
-    if (pendingDelete && pendingDelete.timeout) {
-      clearTimeout(pendingDelete.timeout);
-    }
-    
-    // Restore the log
+  // Delete from Supabase immediately
+  if (!supabaseClient) {
+    showToast('Supabase client not initialized', 'error', 'Error');
     currentLogs.push(logToDelete);
-    pendingDelete = null;
-    
-    // Update UI
-    if (currentUser.role === 'admin') {
-      renderAdminView();
-    } else {
-      renderUserView();
-    }
-    
-    showToast('Entry restored', 'info');
-  };
+    return;
+  }
   
-  showToast('Entry deleted', 'success', '', { 
-    onUndo: undoHandler,
-    showProgress: true,
-    timeout: 5000
-  });
-  
-  // Set up delayed actual deletion
-  pendingDelete = {
-    logId: logId,
-    logData: logToDelete,
-    timeout: setTimeout(async () => {
-      // Actually delete from Supabase
-      if (!supabaseClient) {
-        console.error('Supabase client not initialized');
-        return;
-      }
-      
+  try {
+    const { error } = await supabaseClient
+      .from('logs')
+      .delete()
+      .eq('id', logId);
+    
+    if (error) throw error;
+    
+    // Show success toast with undo option
+    const undoHandler = async () => {
       try {
-        const { error } = await supabaseClient
+        // Re-insert the deleted entry
+        const { data, error: insertError } = await supabaseClient
           .from('logs')
-          .delete()
-          .eq('id', logId);
+          .insert([{
+            user_email: logToDelete.userEmail,
+            date: logToDelete.date,
+            type: logToDelete.type,
+            fact_hours: logToDelete.factHours,
+            credited_hours: logToDelete.creditedHours,
+            comment: logToDelete.comment || '',
+            approved_by: logToDelete.approvedBy || ''
+          }])
+          .select()
+          .single();
         
-        if (error) throw error;
-        pendingDelete = null;
-      } catch (error) {
-        // Rollback on error
-        console.error('Delete error:', error);
-        currentLogs.push(logToDelete);
+        if (insertError) throw insertError;
+        
+        // Update local state with new ID
+        const restoredLog = {
+          id: data.id,
+          userEmail: data.user_email,
+          date: data.date,
+          type: data.type,
+          factHours: data.fact_hours,
+          creditedHours: data.credited_hours,
+          comment: data.comment,
+          approvedBy: data.approved_by
+        };
+        
+        currentLogs.push(restoredLog);
+        
+        // Update UI
         if (currentUser.role === 'admin') {
           renderAdminView();
         } else {
           renderUserView();
         }
-        showToast('Error deleting: ' + error.message, 'error', 'Error');
-        pendingDelete = null;
+        
+        showToast('Entry restored', 'info');
+      } catch (restoreError) {
+        console.error('Error restoring entry:', restoreError);
+        showToast('Could not restore entry: ' + restoreError.message, 'error');
       }
-    }, 5000) // 5 seconds delay before actual deletion
-  };
+    };
+    
+    showToast('Entry deleted', 'success', '', { 
+      onUndo: undoHandler,
+      timeout: 5000
+    });
+    
+  } catch (error) {
+    // Rollback on error
+    console.error('Delete error:', error);
+    currentLogs.push(logToDelete);
+    if (currentUser.role === 'admin') {
+      renderAdminView();
+    } else {
+      renderUserView();
+    }
+    showToast('Error deleting: ' + error.message, 'error', 'Error');
+  }
 }
 
 // Update user name
