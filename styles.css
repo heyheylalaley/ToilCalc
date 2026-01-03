@@ -627,6 +627,40 @@ body {
   text-align: center;
 }
 
+.quick-add-comment-row {
+  margin-bottom: 16px;
+}
+
+.quick-add-comment-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius);
+  font-size: 14px;
+  transition: all 0.2s;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.quick-add-comment-input:focus {
+  outline: none;
+  border-color: var(--success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.quick-add-comment-input::placeholder {
+  color: var(--text-muted);
+}
+
+[data-theme="dark"] .quick-add-comment-input {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .quick-add-comment-input:focus {
+  border-color: var(--success);
+}
+
 .quick-add-buttons {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

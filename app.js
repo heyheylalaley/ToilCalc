@@ -1619,6 +1619,10 @@ async function quickAddOvertime(hours) {
   
   const today = new Date().toISOString().split('T')[0];
   
+  // Get comment from input field
+  const commentInput = document.getElementById('quickAddComment');
+  const comment = commentInput?.value.trim() || 'Quick add';
+  
   // Optimistic update
   const creditedHours = hours * currentMultiplier;
   const tempLog = {
@@ -1628,12 +1632,17 @@ async function quickAddOvertime(hours) {
     type: 'overtime',
     factHours: hours,
     creditedHours: creditedHours,
-    comment: 'Quick add',
+    comment: comment,
     approvedBy: ''
   };
   
   currentLogs.push(tempLog);
   renderUserView();
+  
+  // Clear the comment input after adding
+  if (commentInput) {
+    commentInput.value = '';
+  }
   
   // Save to Supabase
   if (!supabaseClient) {
@@ -1650,7 +1659,7 @@ async function quickAddOvertime(hours) {
         type: 'overtime',
         fact_hours: hours,
         credited_hours: creditedHours,
-        comment: 'Quick add',
+        comment: comment,
         approved_by: ''
       }])
       .select()
