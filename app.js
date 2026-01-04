@@ -2448,16 +2448,19 @@ async function handleEditLog(e) {
   // Store ID before hiding modal
   const logIdToUpdate = editLogId;
   
-  // Check if entry was approved - mark as edited after approval
+  // Only mark as edited if NOT admin (admin edits don't trigger edited flag)
+  const isAdminEdit = currentUser.role === 'admin';
   const wasApproved = log.type === 'timeoff' && log.approvedBy;
-  const editedAt = new Date().toISOString();
+  const editedAt = isAdminEdit ? log.editedAt : new Date().toISOString();
   
   // Optimistic update
   log.date = newDate;
   log.factHours = newHours;
   log.creditedHours = newCreditedHours;
   log.comment = newComment;
-  log.editedAt = editedAt;
+  if (!isAdminEdit) {
+    log.editedAt = editedAt;
+  }
   
   // Update UI immediately
   if (currentUser.role === 'admin') {
@@ -2475,20 +2478,26 @@ async function handleEditLog(e) {
   }
   
   try {
+    // Build update object - only include edited_at for non-admin edits
+    const updateData = {
+      date: newDate,
+      fact_hours: newHours,
+      credited_hours: newCreditedHours,
+      comment: newComment
+    };
+    
+    if (!isAdminEdit) {
+      updateData.edited_at = editedAt;
+    }
+    
     const { error } = await supabaseClient
       .from('logs')
-      .update({
-        date: newDate,
-        fact_hours: newHours,
-        credited_hours: newCreditedHours,
-        comment: newComment,
-        edited_at: editedAt
-      })
+      .update(updateData)
       .eq('id', logIdToUpdate);
     
     if (error) throw error;
     
-    if (wasApproved) {
+    if (wasApproved && !isAdminEdit) {
       showToast('Entry updated (was already approved)', 'warning');
     } else {
       showToast('Entry updated', 'success');
