@@ -1338,7 +1338,8 @@ async function loadUserLogs() {
       createdAt: log.created_at,
       approvedBy: log.approved_by || '',
       editedAt: log.edited_at || null,
-      changeHistory: log.change_history || []
+      changeHistory: log.change_history || [],
+      acknowledgedBy: log.acknowledged_by || ''
     }));
   } catch (error) {
     console.error('Logs loading error:', error);
@@ -1370,7 +1371,8 @@ async function loadAllLogs() {
       createdAt: log.created_at,
       approvedBy: log.approved_by || '',
       editedAt: log.edited_at || null,
-      changeHistory: log.change_history || []
+      changeHistory: log.change_history || [],
+      acknowledgedBy: log.acknowledged_by || ''
     }));
   } catch (error) {
     console.error('All logs loading error:', error);
@@ -2059,12 +2061,15 @@ function renderAdminLogs() {
     const credited = parseFloat(log.creditedHours) || 0;
     const userName = currentUsers.find(u => u.email === log.userEmail)?.name || log.userEmail;
     
-    // Build approval text with edited indicator
+    // Build approval text with edited indicator and acknowledged status
     let approvedByText = '';
     if (log.type === 'timeoff' && log.approvedBy) {
       approvedByText = `<br><small style="color: var(--gray-600);">Approved By: ${escapeHtml(log.approvedBy)}`;
       if (log.editedAt) {
         approvedByText += ` <span class="edited-badge-warning" title="Edited after approval">⚠️</span>`;
+      }
+      if (log.acknowledgedBy) {
+        approvedByText += ` <span class="acknowledged-badge" title="Acknowledged by ${escapeHtml(log.acknowledgedBy)}">✓ Acknowledged</span>`;
       }
       approvedByText += `</small>`;
     }
@@ -2101,6 +2106,11 @@ function renderAdminLogs() {
         ${log.type === 'timeoff' && !log.approvedBy ? `
           <button class="table-action-btn table-approve-btn" onclick="approveEntry(${log.id})" title="Approve">
             ✅
+          </button>
+        ` : ''}
+        ${log.type === 'timeoff' && log.approvedBy && log.editedAt && !log.acknowledgedBy ? `
+          <button class="table-action-btn table-acknowledge-btn" onclick="acknowledgeEntry(${log.id})" title="Acknowledge changes">
+            ✓
           </button>
         ` : ''}
         <button class="table-action-btn table-edit-btn" onclick="showEditLogModal(${log.id})" title="Edit">
@@ -2203,7 +2213,8 @@ async function saveLogEntry(userEmail, date, type, hours, comment, form) {
     factHours: factHours,
     creditedHours: creditedHours,
     comment: comment,
-    approvedBy: ''
+    approvedBy: '',
+    acknowledgedBy: ''
   };
   
   // Add to current logs immediately
@@ -2431,6 +2442,60 @@ async function approveEntry(logId) {
   }
 }
 
+// Acknowledge edited entry (admin only)
+async function acknowledgeEntry(logId) {
+  if (currentUser.role !== 'admin') {
+    showToast('Only admins can acknowledge entries', 'error', 'Error');
+    return;
+  }
+  
+  const log = currentLogs.find(l => l.id == logId);
+  if (!log) {
+    showToast('Entry not found', 'error', 'Error');
+    return;
+  }
+  
+  // Check if entry was approved and edited
+  if (!log.approvedBy || !log.editedAt) {
+    showToast('This entry does not need acknowledgment', 'warning');
+    return;
+  }
+  
+  // Check if already acknowledged
+  if (log.acknowledgedBy) {
+    showToast('This entry is already acknowledged', 'info');
+    return;
+  }
+  
+  // Optimistic update
+  const oldAcknowledgedBy = log.acknowledgedBy;
+  log.acknowledgedBy = currentUser.name;
+  renderAdminView();
+  
+  // Save to Supabase
+  if (!supabaseClient) {
+    showToast('Supabase client not initialized', 'error', 'Error');
+    return;
+  }
+  
+  try {
+    const { error } = await supabaseClient
+      .from('logs')
+      .update({ acknowledged_by: currentUser.name })
+      .eq('id', logId);
+    
+    if (error) throw error;
+    
+    showToast('Entry acknowledged', 'success');
+  } catch (error) {
+    // Rollback on error
+    log.acknowledgedBy = oldAcknowledgedBy;
+    renderAdminView();
+    console.error('Acknowledge error:', error);
+    showToast('Error acknowledging entry: ' + error.message, 'error', 'Error');
+  }
+}
+
 // Edit log entry
 async function handleEditLog(e) {
   e.preventDefault();
@@ -2484,6 +2549,7 @@ async function handleEditLog(e) {
   const oldComment = log.comment;
   const oldEditedAt = log.editedAt;
   const oldChangeHistory = log.changeHistory || [];
+  const oldAcknowledgedBy = log.acknowledgedBy;
   
   // Store ID before hiding modal
   const logIdToUpdate = editLogId;
@@ -2492,6 +2558,10 @@ async function handleEditLog(e) {
   const isAdminEdit = currentUser.role === 'admin';
   const wasApproved = log.type === 'timeoff' && log.approvedBy;
   const editedAt = new Date().toISOString();
+  
+  // If entry was acknowledged and is being edited, reset acknowledgedBy
+  // so admin needs to acknowledge the new changes
+  const shouldResetAcknowledged = oldAcknowledgedBy && wasApproved;
   
   // Build change history entry - track what changed
   const changes = {};
@@ -2525,6 +2595,10 @@ async function handleEditLog(e) {
   log.comment = newComment;
   log.editedAt = editedAt;
   log.changeHistory = newChangeHistory;
+  // Reset acknowledgedBy if entry was acknowledged and is being edited
+  if (shouldResetAcknowledged) {
+    log.acknowledgedBy = '';
+  }
   
   // Update UI immediately
   if (currentUser.role === 'admin') {
@@ -2552,6 +2626,11 @@ async function handleEditLog(e) {
       change_history: newChangeHistory
     };
     
+    // Reset acknowledged_by if entry was acknowledged and is being edited
+    if (shouldResetAcknowledged) {
+      updateData.acknowledged_by = null;
+    }
+    
     const { error } = await supabaseClient
       .from('logs')
       .update(updateData)
@@ -2572,6 +2651,7 @@ async function handleEditLog(e) {
     log.comment = oldComment;
     log.editedAt = oldEditedAt;
     log.changeHistory = oldChangeHistory;
+    log.acknowledgedBy = oldAcknowledgedBy;
     
     if (currentUser.role === 'admin') {
       renderAdminView();
