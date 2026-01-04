@@ -829,7 +829,9 @@ function showToast(message, type = 'info', title = '', options = {}) {
       toast.style.animation = 'toastSlideIn 0.3s ease reverse';
       setTimeout(() => toast.remove(), 300);
     }
-  }, 5000);
+  }, timeout);
+  
+  return toast;
 }
 
 // Modal functions
@@ -1197,6 +1199,22 @@ function setupEventListeners() {
     });
   }
   
+  // Search input for admin view with debounce for performance
+  const adminSearchInput = document.getElementById('adminSearchInput');
+  if (adminSearchInput) {
+    let adminSearchTimeout = null;
+    adminSearchInput.addEventListener('input', () => {
+      // Debounce search for better performance
+      if (adminSearchTimeout) clearTimeout(adminSearchTimeout);
+      adminSearchTimeout = setTimeout(() => {
+        const searchTerm = adminSearchInput.value;
+        const selectedCard = document.querySelector('.user-card.selected');
+        const selectedEmail = selectedCard ? selectedCard.dataset.email : null;
+        filterAdminLogs(searchTerm, selectedEmail);
+      }, 150); // 150ms debounce
+    });
+  }
+  
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     // Escape closes modals
@@ -1514,7 +1532,13 @@ async function quickAddOvertime(hours, source = 'user') {
   };
   
   currentLogs.push(tempLog);
-  renderUserView();
+  
+  // Render correct view based on user role
+  if (currentUser.role === 'admin') {
+    renderAdminView();
+  } else {
+    renderUserView();
+  }
   
   // Clear the comment input after adding
   if (commentInput) {
@@ -1551,7 +1575,11 @@ async function quickAddOvertime(hours, source = 'user') {
   } catch (error) {
     // Rollback
     currentLogs = currentLogs.filter(log => !log.id.toString().startsWith('temp-'));
-    renderUserView();
+    if (currentUser.role === 'admin') {
+      renderAdminView();
+    } else {
+      renderUserView();
+    }
     console.error('Quick add error:', error);
     showToast('Error adding entry: ' + error.message, 'error', 'Error');
   }
@@ -1904,10 +1932,10 @@ function renderUsersList() {
         card.classList.add('selected');
         const userName = currentUsers.find(u => u.email === email)?.name || email;
         document.getElementById('historyTitle').textContent = `History: ${userName}`;
-        filterAdminLogs(email);
+        filterAdminLogs(searchTerm, email);
       } else {
         document.getElementById('historyTitle').textContent = 'All Records';
-        filterAdminLogs(null);
+        filterAdminLogs(searchTerm, null);
       }
     });
   });
@@ -2495,5 +2523,5 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Экспорт функции для глобального использования
+// Export function for global use
 window.showDeleteModal = showDeleteModal;

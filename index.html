@@ -98,7 +98,7 @@
     </div>
   </div>
 
-  <!-- Основной интерфейс -->
+  <!-- Main App Interface -->
   <div id="mainApp" class="main-app hidden">
     <!-- Header -->
     <header class="app-header">
@@ -393,6 +393,11 @@
           <h2 class="card-title">
             <span>📋</span> <span id="historyTitle">All Records</span>
           </h2>
+          <div class="search-container">
+            <div class="search-wrapper">
+              <input type="text" id="adminSearchInput" class="search-input" placeholder="Search by name, email, comments...">
+            </div>
+          </div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap;">
             <div class="date-filters" id="adminDateFilters">
               <button class="date-filter-btn active" data-filter="all">All</button>
