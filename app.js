@@ -23,7 +23,6 @@ let currentLogs = [];
 let currentUsers = [];
 let currentMultiplier = 1.5;
 let deleteLogId = null; // For delete modal
-let editLogId = null; // For edit modal
 let filteredLogs = []; // For search functionality
 let currentDateFilter = 'all'; // Current date filter (all, today, week, month)
 let sortOrder = 'desc'; // Sort order: 'desc' (newest first) or 'asc' (oldest first)
@@ -888,46 +887,6 @@ function hideDeleteUserModal() {
   }
 }
 
-function showEditLogModal(logId) {
-  const log = currentLogs.find(l => l.id == logId);
-  if (!log) return;
-  
-  editLogId = logId;
-  const modal = document.getElementById('editLogModal');
-  const dateInput = document.getElementById('editLogDate');
-  const commentInput = document.getElementById('editLogComment');
-  const approvedByInput = document.getElementById('editLogApprovedBy');
-  const approvedByGroup = document.getElementById('editApprovedByGroup');
-  
-  if (modal && dateInput && commentInput) {
-    // Set date value (convert from stored format to input format)
-    const dateStr = log.date.split('T')[0];
-    dateInput.value = dateStr;
-    
-    commentInput.value = log.comment || '';
-    
-    // Show/hide approved by field based on type
-    if (log.type === 'timeoff') {
-      approvedByGroup.style.display = 'block';
-      approvedByInput.value = log.approvedBy || '';
-    } else {
-      approvedByGroup.style.display = 'none';
-      approvedByInput.value = '';
-    }
-    
-    modal.classList.remove('hidden');
-    commentInput.focus();
-  }
-}
-
-function hideEditLogModal() {
-  editLogId = null;
-  const modal = document.getElementById('editLogModal');
-  if (modal) {
-    modal.classList.add('hidden');
-  }
-}
-
 // Setup event listeners
 function setupEventListeners() {
   // Theme toggle
@@ -1121,16 +1080,6 @@ function setupEventListeners() {
     deleteUserCancelBtn.addEventListener('click', hideDeleteUserModal);
   }
   
-  // Edit log modal
-  const editLogForm = document.getElementById('editLogForm');
-  const editLogCancelBtn = document.getElementById('editLogCancelBtn');
-  if (editLogForm) {
-    editLogForm.addEventListener('submit', handleEditLog);
-  }
-  if (editLogCancelBtn) {
-    editLogCancelBtn.addEventListener('click', hideEditLogModal);
-  }
-  
   // Close modals on backdrop click
   const modals = document.querySelectorAll('.modal');
   modals.forEach(modal => {
@@ -1170,7 +1119,6 @@ function setupEventListeners() {
       btn.addEventListener('click', () => {
         userForm.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        toggleApprovedByField('logApprovedBy', 'approvedByGroup', btn.dataset.type === 'timeoff');
         updateCreditedPreview();
       });
     });
@@ -1183,20 +1131,9 @@ function setupEventListeners() {
       btn.addEventListener('click', () => {
         adminForm.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        toggleApprovedByField('adminLogApprovedBy', 'adminApprovedByGroup', btn.dataset.type === 'timeoff');
         updateAdminCreditedPreview();
       });
     });
-  }
-  
-  // Toggle Approved By field visibility
-  function toggleApprovedByField(inputId, groupId, show) {
-    const group = document.getElementById(groupId);
-    const input = document.getElementById(inputId);
-    if (group && input) {
-      group.style.display = show ? 'block' : 'none';
-      if (!show) input.value = '';
-    }
   }
   
   // Form fields
@@ -1273,7 +1210,6 @@ function setupEventListeners() {
       hideDeleteModal();
       hideEditNameModal();
       hideDeleteUserModal();
-      hideEditLogModal();
     }
   });
 }
@@ -1460,7 +1396,7 @@ function formatDate(dateString) {
     // If parsing failed, try to extract date part from ISO string
     const dateMatch = dateString.match(/(\d{4})-(\d{2})-(\d{2})/);
     if (dateMatch) {
-      return `${dateMatch[3]}.${dateMatch[2]}.${dateMatch[1]}`;
+      return `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`;
     }
     return dateString;
   }
@@ -1468,7 +1404,7 @@ function formatDate(dateString) {
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
-  return `${day}.${month}.${year}`;
+  return `${day}-${month}-${year}`;
 }
 
 // Calculate balance
@@ -1835,11 +1771,9 @@ function renderUserLogs() {
           <div class="log-credited ${credited > 0 ? 'positive' : 'negative'}">
             ${credited > 0 ? '+' : ''}${credited} hrs
           </div>
-          <div class="log-actions">
-            <button class="log-action-btn log-edit-btn" onclick="showEditLogModal(${log.id})" title="Edit entry">
-              ✏️
-            </button>
-          </div>
+          <button class="log-delete-btn" onclick="showDeleteModal(${log.id})" title="Delete entry">
+            🗑️
+          </button>
         </div>
       </div>
     `;
@@ -2069,9 +2003,6 @@ function renderAdminLogs() {
             ✅
           </button>
         ` : ''}
-        <button class="table-action-btn table-edit-btn" onclick="showEditLogModal(${log.id})" title="Edit">
-          ✏️
-        </button>
         <button class="table-action-btn" onclick="showDeleteModal(${log.id})" title="Delete">
           🗑️
         </button>
@@ -2100,7 +2031,6 @@ async function handleAddLog(e) {
   const date = document.getElementById('logDate').value;
   const hours = parseFloat(document.getElementById('logHours').value);
   const comment = document.getElementById('logComment').value;
-  const approvedBy = type === 'timeoff' ? (document.getElementById('logApprovedBy')?.value || '') : '';
   
   // Validation
   if (!date) {
@@ -2120,7 +2050,7 @@ async function handleAddLog(e) {
     return;
   }
   
-  await saveLogEntry(currentUser.email, date, type, hours, comment, approvedBy, form);
+  await saveLogEntry(currentUser.email, date, type, hours, comment, form);
 }
 
 // Add log entry (admin)
@@ -2132,7 +2062,6 @@ async function handleAdminAddLog(e) {
   const date = document.getElementById('adminLogDate').value;
   const hours = parseFloat(document.getElementById('adminLogHours').value);
   const comment = document.getElementById('adminLogComment').value;
-  const approvedBy = type === 'timeoff' ? (document.getElementById('adminLogApprovedBy')?.value || '') : '';
   
   // Validation
   if (!date) {
@@ -2152,11 +2081,11 @@ async function handleAdminAddLog(e) {
     return;
   }
   
-  await saveLogEntry(currentUser.email, date, type, hours, comment, approvedBy, form);
+  await saveLogEntry(currentUser.email, date, type, hours, comment, form);
 }
 
 // Save log entry with optimistic update
-async function saveLogEntry(userEmail, date, type, hours, comment, approvedBy, form) {
+async function saveLogEntry(userEmail, date, type, hours, comment, form) {
   // Optimistic update - add entry immediately to UI
   const factHours = hours;
   const creditedHours = type === 'overtime' 
@@ -2171,7 +2100,7 @@ async function saveLogEntry(userEmail, date, type, hours, comment, approvedBy, f
     factHours: factHours,
     creditedHours: creditedHours,
     comment: comment,
-    approvedBy: approvedBy || ''
+    approvedBy: ''
   };
   
   // Add to current logs immediately
@@ -2220,7 +2149,7 @@ async function saveLogEntry(userEmail, date, type, hours, comment, approvedBy, f
         fact_hours: factHours,
         credited_hours: creditedHours,
         comment: comment || '',
-        approved_by: approvedBy || ''
+        approved_by: ''
       }])
       .select()
       .single();
@@ -2338,95 +2267,6 @@ async function handleDeleteLog(logId) {
       renderUserView();
     }
     showToast('Error deleting: ' + error.message, 'error', 'Error');
-  }
-}
-
-// Edit log entry
-async function handleEditLog(e) {
-  e.preventDefault();
-  
-  if (!editLogId) return;
-  
-  const log = currentLogs.find(l => l.id == editLogId);
-  if (!log) {
-    hideEditLogModal();
-    return;
-  }
-  
-  const newDate = document.getElementById('editLogDate').value;
-  const newComment = document.getElementById('editLogComment').value.trim();
-  const newApprovedBy = log.type === 'timeoff' 
-    ? document.getElementById('editLogApprovedBy').value.trim() 
-    : '';
-  
-  // Validation
-  if (!newDate) {
-    showToast('Please select a date', 'warning');
-    return;
-  }
-  
-  // Check if anything changed
-  const oldDateStr = log.date.split('T')[0];
-  if (newDate === oldDateStr && newComment === (log.comment || '') && newApprovedBy === (log.approvedBy || '')) {
-    hideEditLogModal();
-    return;
-  }
-  
-  // Store old values for rollback
-  const oldDate = log.date;
-  const oldComment = log.comment;
-  const oldApprovedBy = log.approvedBy;
-  
-  // Store ID before hiding modal (hideEditLogModal sets editLogId to null)
-  const logIdToUpdate = editLogId;
-  
-  // Optimistic update
-  log.date = newDate;
-  log.comment = newComment;
-  log.approvedBy = newApprovedBy;
-  
-  // Update UI immediately
-  if (currentUser.role === 'admin') {
-    renderAdminView();
-  } else {
-    renderUserView();
-  }
-  
-  hideEditLogModal();
-  
-  // Save to Supabase
-  if (!supabaseClient) {
-    showToast('Supabase client not initialized', 'error', 'Error');
-    return;
-  }
-  
-  try {
-    const { error } = await supabaseClient
-      .from('logs')
-      .update({
-        date: newDate,
-        comment: newComment,
-        approved_by: newApprovedBy
-      })
-      .eq('id', logIdToUpdate);
-    
-    if (error) throw error;
-    
-    showToast('Entry updated', 'success');
-  } catch (error) {
-    // Rollback on error
-    log.date = oldDate;
-    log.comment = oldComment;
-    log.approvedBy = oldApprovedBy;
-    
-    if (currentUser.role === 'admin') {
-      renderAdminView();
-    } else {
-      renderUserView();
-    }
-    
-    console.error('Edit error:', error);
-    showToast('Error updating entry: ' + error.message, 'error', 'Error');
   }
 }
 
@@ -2611,8 +2451,6 @@ function resetForm() {
   const dateInput = document.getElementById('logDate');
   const hoursInput = document.getElementById('logHours');
   const commentInput = document.getElementById('logComment');
-  const approvedByInput = document.getElementById('logApprovedBy');
-  const approvedByGroup = document.getElementById('approvedByGroup');
   const form = document.getElementById('addLogForm');
   
   if (dateInput) {
@@ -2624,8 +2462,6 @@ function resetForm() {
   }
   if (hoursInput) hoursInput.value = '';
   if (commentInput) commentInput.value = '';
-  if (approvedByInput) approvedByInput.value = '';
-  if (approvedByGroup) approvedByGroup.style.display = 'none';
   if (form) {
     form.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
     const overtimeBtn = form.querySelector('.type-btn[data-type="overtime"]');
@@ -2639,8 +2475,6 @@ function resetAdminForm() {
   const dateInput = document.getElementById('adminLogDate');
   const hoursInput = document.getElementById('adminLogHours');
   const commentInput = document.getElementById('adminLogComment');
-  const approvedByInput = document.getElementById('adminLogApprovedBy');
-  const approvedByGroup = document.getElementById('adminApprovedByGroup');
   const form = document.getElementById('adminAddLogForm');
   
   if (dateInput) {
@@ -2652,8 +2486,6 @@ function resetAdminForm() {
   }
   if (hoursInput) hoursInput.value = '';
   if (commentInput) commentInput.value = '';
-  if (approvedByInput) approvedByInput.value = '';
-  if (approvedByGroup) approvedByGroup.style.display = 'none';
   if (form) {
     form.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
     const overtimeBtn = form.querySelector('.type-btn[data-type="overtime"]');
@@ -2721,6 +2553,5 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Export functions for global use
+// Export function for global use
 window.showDeleteModal = showDeleteModal;
-window.showEditLogModal = showEditLogModal;
