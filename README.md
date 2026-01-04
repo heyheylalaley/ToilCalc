@@ -12,17 +12,33 @@ Web application for tracking overtime and time off for employees.
 ## 📋 Features
 
 ### For Employees:
-- ✅ View current time off balance
-- ✅ Add overtime and time off entries
-- ✅ View personal history
+- ✅ View current time off balance with detailed statistics
+- ✅ Quick add overtime buttons (1h, 2h, 3h, custom)
+- ✅ Add overtime and time off entries with comments
+- ✅ View personal history with search and filters
+- ✅ Filter entries by date (All, Today, This Week, This Month)
+- ✅ Sort entries (Newest First / Oldest First)
+- ✅ Edit own entries (date, hours, comment)
+- ✅ Delete own entries within 5 minutes of creation
 - ✅ Edit own name
-
+- ✅ View statistics chart for last 30 days
+- ✅ Dark/Light theme support
 
 ### For Administrators:
+- ✅ All employee features
 - ✅ View all employees and their balances
-- ✅ View all entries
-- ✅ Delete entries
+- ✅ View all entries in table format
+- ✅ Search entries by name, email, or comments
+- ✅ Filter and sort all entries
+- ✅ Approve time off entries
+- ✅ Edit any entry (date, hours, comment)
+- ✅ Delete any entry
 - ✅ Delete users
+- ✅ Acknowledge edited entries after approval
+- ✅ View change history for entries
+- ✅ Configure overtime multiplier
+- ✅ See edited entries indicators (⚠️ badge)
+- ✅ See acknowledged entries status (✓ Acknowledged badge)
 
 ## 🚀 Quick Start
 
@@ -31,7 +47,9 @@ Web application for tracking overtime and time off for employees.
 1. Create a project on [Supabase](https://supabase.com)
 2. Go to **SQL Editor**
 3. Execute SQL from `supabase-schema.sql` file
-4. Configure Google OAuth in **Authentication → Providers → Google**
+4. If you're upgrading an existing database, also run `add_acknowledged_by_column.sql` to add the `acknowledged_by` column
+5. Configure Google OAuth in **Authentication → Providers → Google**
+6. Enable Email/Password authentication in **Authentication → Providers → Email** (optional)
 
 ### Step 2: Setup Google OAuth
 
@@ -76,19 +94,31 @@ Web application for tracking overtime and time off for employees.
 
 ```
 .
-├── index.html          # Main HTML file
-├── styles.css          # Styles
-├── app.js             # Frontend logic
-├── supabase-schema.sql # Database schema
-└── README.md          # Documentation
+├── index.html                    # Main HTML file
+├── styles.css                    # Styles (includes dark theme)
+├── app.js                       # Frontend logic
+├── supabase-schema.sql          # Database schema with RLS policies
+├── add_acknowledged_by_column.sql # Migration script for acknowledged_by
+└── README.md                    # Documentation
 ```
 
 ## 🔐 Security
 
-- Authentication via Google OAuth (Supabase)
-- Row Level Security (RLS) policies in PostgreSQL
-- Users can only edit their own data
-- Admins have extended access rights
+- **Authentication**: Google OAuth + Email/Password (Supabase)
+- **Row Level Security (RLS)**: Enforced at database level
+- **User permissions**:
+  - Can only view/edit/delete their own entries
+  - Can delete own entries only within 5 minutes of creation
+  - Can edit own name only
+- **Admin permissions**:
+  - Full access to all entries and users
+  - Can approve time off entries
+  - Can acknowledge edited entries after approval
+  - Can configure system settings (overtime multiplier)
+- **Data integrity**:
+  - Change history tracking for audit trail
+  - Edited entries marked with warning indicators
+  - Acknowledgment system for post-approval changes
 
 ## 📊 Data Structure
 
@@ -98,13 +128,27 @@ Web application for tracking overtime and time off for employees.
 | 1 | Ivan Petrov | ivan@company.com | user | 2025-01-10 |
 
 ### logs table
-| id | user_email | date | type | fact_hours | credited_hours | comment | created_at |
-|----|-----------|------|------|------------|----------------|---------|-------------|
-| 1 | ivan@... | 2025-01-10 | overtime | 4 | 6 | Project X | 2025-01-10 |
+| id | user_email | date | type | fact_hours | credited_hours | comment | approved_by | edited_at | change_history | acknowledged_by | created_at |
+|----|-----------|------|------|------------|----------------|---------|-------------|-----------|----------------|-----------------|------------|
+| 1 | ivan@... | 2025-01-10 | overtime | 4 | 6 | Project X | - | - | [] | - | 2025-01-10 |
+| 2 | ivan@... | 2025-01-11 | timeoff | 8 | -8 | Vacation | Admin Name | 2025-01-12 | [{...}] | Admin Name | 2025-01-11 |
+
+**Fields:**
+- `approved_by`: Admin who approved the time off entry (only for timeoff type)
+- `edited_at`: Timestamp when entry was edited after creation
+- `change_history`: JSON array tracking all changes (who, when, what changed)
+- `acknowledged_by`: Admin who acknowledged changes made after approval
 
 **Accrual formula:**
-- Overtime: `credited_hours = fact_hours × 1.5`
+- Overtime: `credited_hours = fact_hours × multiplier` (default: 1.5x)
 - Time off: `credited_hours = -fact_hours`
+
+**Entry lifecycle:**
+1. User creates entry → `created_at` set
+2. Admin approves (timeoff only) → `approved_by` set
+3. User edits entry → `edited_at` set, `change_history` updated
+4. Admin acknowledges changes → `acknowledged_by` set
+5. If edited again after acknowledgment → `acknowledged_by` reset (requires new acknowledgment)
 
 ### settings table
 | key | value |
