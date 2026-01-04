@@ -117,6 +117,8 @@ Web application for tracking overtime and time off for employees.
   - Can approve time off entries
   - Can acknowledge edited entries after approval
   - Can configure system settings (overtime multiplier)
+  - Can edit user names
+  - Can assign/remove administrator role for other users
 - **Data integrity**:
   - Change history tracking for audit trail
   - Edited entries marked with warning indicators
