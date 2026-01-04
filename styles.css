@@ -1237,6 +1237,14 @@ body {
   background: var(--gray-100);
 }
 
+.table-action-btn.table-edit-btn {
+  color: var(--primary);
+}
+
+.table-action-btn.table-approve-btn {
+  color: var(--success);
+}
+
 /* Loading */
 .loading-overlay {
   position: fixed;

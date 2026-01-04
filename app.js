@@ -1839,9 +1839,6 @@ function renderUserLogs() {
             <button class="log-action-btn log-edit-btn" onclick="showEditLogModal(${log.id})" title="Edit entry">
               ✏️
             </button>
-            <button class="log-action-btn log-delete-btn" onclick="showDeleteModal(${log.id})" title="Delete entry">
-              🗑️
-            </button>
           </div>
         </div>
       </div>
@@ -2066,7 +2063,12 @@ function renderAdminLogs() {
         ${credited > 0 ? '+' : ''}${credited}
       </td>
       <td>${escapeHtml(log.comment || '')}${approvedByText}</td>
-      <td class="text-center">
+      <td class="text-center" style="white-space: nowrap;">
+        ${log.type === 'timeoff' && !log.approvedBy ? `
+          <button class="table-action-btn table-approve-btn" onclick="approveEntry(${log.id})" title="Approve">
+            ✅
+          </button>
+        ` : ''}
         <button class="table-action-btn table-edit-btn" onclick="showEditLogModal(${log.id})" title="Edit">
           ✏️
         </button>
@@ -2425,6 +2427,53 @@ async function handleEditLog(e) {
     
     console.error('Edit error:', error);
     showToast('Error updating entry: ' + error.message, 'error', 'Error');
+  }
+}
+
+// Approve entry (admin only)
+async function approveEntry(logId) {
+  if (!currentUser || currentUser.role !== 'admin') {
+    showToast('Only admins can approve entries', 'error', 'Error');
+    return;
+  }
+  
+  const log = currentLogs.find(l => l.id == logId);
+  if (!log) {
+    showToast('Entry not found', 'error', 'Error');
+    return;
+  }
+  
+  if (log.type !== 'timeoff') {
+    showToast('Only time off entries can be approved', 'warning');
+    return;
+  }
+  
+  // Optimistic update
+  const oldApprovedBy = log.approvedBy;
+  log.approvedBy = currentUser.name;
+  renderAdminView();
+  
+  // Save to Supabase
+  if (!supabaseClient) {
+    showToast('Supabase client not initialized', 'error', 'Error');
+    return;
+  }
+  
+  try {
+    const { error } = await supabaseClient
+      .from('logs')
+      .update({ approved_by: currentUser.name })
+      .eq('id', logId);
+    
+    if (error) throw error;
+    
+    showToast('Entry approved', 'success');
+  } catch (error) {
+    // Rollback on error
+    log.approvedBy = oldApprovedBy;
+    renderAdminView();
+    console.error('Approve error:', error);
+    showToast('Error approving entry: ' + error.message, 'error', 'Error');
   }
 }
 

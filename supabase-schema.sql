@@ -107,8 +107,8 @@ CREATE POLICY "Admins can delete users" ON users
 DROP POLICY IF EXISTS "Users can read own logs" ON logs;
 DROP POLICY IF EXISTS "Users can insert own logs" ON logs;
 DROP POLICY IF EXISTS "Users can update own logs" ON logs;
-DROP POLICY IF EXISTS "Users can delete own logs" ON logs;
-DROP POLICY IF EXISTS "Admins can delete logs" ON logs;
+DROP POLICY IF EXISTS "Users can delete own logs" ON logs;  -- Old policy name
+DROP POLICY IF EXISTS "Admins can delete logs" ON logs;     -- New policy name
 
 -- Пользователи могут читать свои логи
 CREATE POLICY "Users can read own logs" ON logs
@@ -135,11 +135,10 @@ CREATE POLICY "Users can update own logs" ON logs
     OR public.is_admin()
   );
 
--- Пользователи могут удалять свои логи, админы могут удалять любые
-CREATE POLICY "Users can delete own logs" ON logs
+-- Только админы могут удалять логи
+CREATE POLICY "Admins can delete logs" ON logs
   FOR DELETE USING (
-    LOWER(TRIM(user_email)) = LOWER(TRIM(auth.jwt() ->> 'email'))
-    OR public.is_admin()
+    public.is_admin()
   );
 
 -- Политики безопасности для таблицы settings
