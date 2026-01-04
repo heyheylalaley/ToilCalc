@@ -1337,7 +1337,8 @@ async function loadUserLogs() {
       comment: log.comment || '',
       createdAt: log.created_at,
       approvedBy: log.approved_by || '',
-      editedAt: log.edited_at || null
+      editedAt: log.edited_at || null,
+      changeHistory: log.change_history || []
     }));
   } catch (error) {
     console.error('Logs loading error:', error);
@@ -1368,7 +1369,8 @@ async function loadAllLogs() {
       comment: log.comment || '',
       createdAt: log.created_at,
       approvedBy: log.approved_by || '',
-      editedAt: log.edited_at || null
+      editedAt: log.edited_at || null,
+      changeHistory: log.change_history || []
     }));
   } catch (error) {
     console.error('All logs loading error:', error);
@@ -1803,6 +1805,11 @@ function renderUserLogs() {
   
   sortedLogs.forEach((log, index) => {
     const credited = parseFloat(log.creditedHours) || 0;
+    const hasHistory = log.changeHistory && log.changeHistory.length > 0;
+    const historyBadge = hasHistory 
+      ? `<span class="history-badge" onclick="showChangeHistoryModal(${log.id})" title="View change history (${log.changeHistory.length} changes)" style="margin-left: 8px;">📜 ${log.changeHistory.length}</span>` 
+      : '';
+    
     tempDiv.innerHTML = `
       <div class="log-item" style="opacity: 0; transform: translateY(10px); transition: opacity 0.3s ease ${index * 0.05}s, transform 0.3s ease ${index * 0.05}s;">
         <div class="log-item-left">
@@ -1811,6 +1818,7 @@ function renderUserLogs() {
               ${log.type === 'overtime' ? 'Overtime' : 'Time Off'}
             </span>
             <span class="log-date">${formatDate(log.date)}</span>
+            ${historyBadge}
           </div>
           <div class="log-details">
             Actual: <strong>${log.factHours} hrs</strong>
@@ -1819,10 +1827,10 @@ function renderUserLogs() {
           ${log.type === 'timeoff' && log.approvedBy ? `
             <div class="log-approved-by" style="margin-top: 4px; font-size: 12px; color: var(--gray-600);">
               Approved By: <strong>${escapeHtml(log.approvedBy)}</strong>
-              ${log.editedAt ? `<span class="edited-badge" title="Edited after approval">⚠️ edited</span>` : ''}
+              ${log.editedAt && !hasHistory ? `<span class="edited-badge" title="Edited after approval">⚠️ edited</span>` : ''}
             </div>
           ` : ''}
-          ${log.editedAt && !(log.type === 'timeoff' && log.approvedBy) ? `<div class="log-edited" style="margin-top: 4px; font-size: 11px; color: var(--gray-500);">✏️ edited</div>` : ''}
+          ${log.editedAt && !(log.type === 'timeoff' && log.approvedBy) && !hasHistory ? `<div class="log-edited" style="margin-top: 4px; font-size: 11px; color: var(--gray-500);">✏️ edited</div>` : ''}
         </div>
         <div class="log-item-right">
           <div class="log-credited ${credited > 0 ? 'positive' : 'negative'}">
@@ -2046,8 +2054,14 @@ function renderAdminLogs() {
       approvedByText += `</small>`;
     }
     
-    // Simple edited indicator for non-approved entries
-    const editedText = log.editedAt && !(log.type === 'timeoff' && log.approvedBy) 
+    // History badge - show if there are changes in history
+    const hasHistory = log.changeHistory && log.changeHistory.length > 0;
+    const historyBadge = hasHistory 
+      ? `<span class="history-badge" onclick="showChangeHistoryModal(${log.id})" title="View change history (${log.changeHistory.length} changes)">📜 ${log.changeHistory.length}</span>` 
+      : '';
+    
+    // Simple edited indicator for non-approved entries (only if no history badge)
+    const editedText = log.editedAt && !(log.type === 'timeoff' && log.approvedBy) && !hasHistory
       ? `<br><small style="color: var(--gray-500);">✏️ edited</small>` 
       : '';
     
@@ -2067,7 +2081,7 @@ function renderAdminLogs() {
       <td class="text-right ${credited > 0 ? 'positive' : 'negative'}" style="font-weight: 600; color: ${credited > 0 ? 'var(--success)' : 'var(--danger)'}">
         ${credited > 0 ? '+' : ''}${credited}
       </td>
-      <td>${escapeHtml(log.comment || '')}${approvedByText}${editedText}</td>
+      <td>${escapeHtml(log.comment || '')}${historyBadge}${approvedByText}${editedText}</td>
       <td class="text-center" style="white-space: nowrap;">
         ${log.type === 'timeoff' && !log.approvedBy ? `
           <button class="table-action-btn table-approve-btn" onclick="approveEntry(${log.id})" title="Approve">
@@ -2438,12 +2452,13 @@ async function handleEditLog(e) {
     return;
   }
   
-  // Store old values for rollback
+  // Store old values for rollback and history
   const oldDate = log.date;
   const oldFactHours = log.factHours;
   const oldCreditedHours = log.creditedHours;
   const oldComment = log.comment;
   const oldEditedAt = log.editedAt;
+  const oldChangeHistory = log.changeHistory || [];
   
   // Store ID before hiding modal
   const logIdToUpdate = editLogId;
@@ -2451,16 +2466,40 @@ async function handleEditLog(e) {
   // Only mark as edited if NOT admin (admin edits don't trigger edited flag)
   const isAdminEdit = currentUser.role === 'admin';
   const wasApproved = log.type === 'timeoff' && log.approvedBy;
-  const editedAt = isAdminEdit ? log.editedAt : new Date().toISOString();
+  const editedAt = new Date().toISOString();
+  
+  // Build change history entry - track what changed
+  const changes = {};
+  if (newDate !== oldDateStr) {
+    changes.date = { from: oldDateStr, to: newDate };
+  }
+  if (newHours !== log.factHours) {
+    changes.hours = { from: log.factHours, to: newHours };
+  }
+  if (newComment !== (log.comment || '')) {
+    changes.comment = { from: log.comment || '', to: newComment };
+  }
+  
+  // Create history record
+  const historyRecord = {
+    changedAt: editedAt,
+    changedBy: currentUser.name,
+    changedByEmail: currentUser.email,
+    wasApproved: wasApproved,
+    approvedBy: log.approvedBy || null,
+    changes: changes
+  };
+  
+  // Append to change history
+  const newChangeHistory = [...oldChangeHistory, historyRecord];
   
   // Optimistic update
   log.date = newDate;
   log.factHours = newHours;
   log.creditedHours = newCreditedHours;
   log.comment = newComment;
-  if (!isAdminEdit) {
-    log.editedAt = editedAt;
-  }
+  log.editedAt = editedAt;
+  log.changeHistory = newChangeHistory;
   
   // Update UI immediately
   if (currentUser.role === 'admin') {
@@ -2478,17 +2517,15 @@ async function handleEditLog(e) {
   }
   
   try {
-    // Build update object - only include edited_at for non-admin edits
+    // Build update object
     const updateData = {
       date: newDate,
       fact_hours: newHours,
       credited_hours: newCreditedHours,
-      comment: newComment
+      comment: newComment,
+      edited_at: editedAt,
+      change_history: newChangeHistory
     };
-    
-    if (!isAdminEdit) {
-      updateData.edited_at = editedAt;
-    }
     
     const { error } = await supabaseClient
       .from('logs')
@@ -2509,6 +2546,7 @@ async function handleEditLog(e) {
     log.creditedHours = oldCreditedHours;
     log.comment = oldComment;
     log.editedAt = oldEditedAt;
+    log.changeHistory = oldChangeHistory;
     
     if (currentUser.role === 'admin') {
       renderAdminView();
@@ -2757,6 +2795,114 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Show change history modal
+function showChangeHistoryModal(logId) {
+  const log = currentLogs.find(l => l.id == logId);
+  if (!log || !log.changeHistory || log.changeHistory.length === 0) {
+    showToast('No change history available', 'info');
+    return;
+  }
+  
+  const userName = currentUsers.find(u => u.email === log.userEmail)?.name || log.userEmail;
+  
+  // Build history HTML
+  const historyHtml = log.changeHistory.map((record, index) => {
+    const changedAt = new Date(record.changedAt);
+    const dateStr = changedAt.toLocaleDateString('ru-RU', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // Build changes description
+    let changesHtml = '';
+    if (record.changes.date) {
+      changesHtml += `<div class="change-history-field">
+        <strong>Date:</strong> 
+        <span class="change-history-old">${formatDate(record.changes.date.from)}</span>
+        <span class="change-history-arrow">→</span>
+        <span class="change-history-new">${formatDate(record.changes.date.to)}</span>
+      </div>`;
+    }
+    if (record.changes.hours) {
+      changesHtml += `<div class="change-history-field">
+        <strong>Hours:</strong> 
+        <span class="change-history-old">${record.changes.hours.from} hrs</span>
+        <span class="change-history-arrow">→</span>
+        <span class="change-history-new">${record.changes.hours.to} hrs</span>
+      </div>`;
+    }
+    if (record.changes.comment) {
+      const oldComment = record.changes.comment.from || '(empty)';
+      const newComment = record.changes.comment.to || '(empty)';
+      changesHtml += `<div class="change-history-field">
+        <strong>Comment:</strong> 
+        <span class="change-history-old">${escapeHtml(oldComment)}</span>
+        <span class="change-history-arrow">→</span>
+        <span class="change-history-new">${escapeHtml(newComment)}</span>
+      </div>`;
+    }
+    
+    // Was approved warning
+    const approvedWarning = record.wasApproved 
+      ? `<div style="color: var(--warning); font-size: 11px; margin-top: 6px;">⚠️ Changed after approval by ${escapeHtml(record.approvedBy || 'admin')}</div>` 
+      : '';
+    
+    return `
+      <div class="change-history-item">
+        <div class="change-history-date">
+          <strong>Change #${index + 1}</strong> — ${dateStr} by ${escapeHtml(record.changedBy || 'Unknown')}
+        </div>
+        <div class="change-history-changes">
+          ${changesHtml}
+        </div>
+        ${approvedWarning}
+      </div>
+    `;
+  }).reverse().join(''); // Reverse to show newest first
+  
+  // Create and show modal
+  const modal = document.createElement('div');
+  modal.className = 'modal change-history-modal';
+  modal.id = 'changeHistoryModal';
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h3>📜 Change History</h3>
+      <p style="margin-bottom: 16px; color: var(--text-secondary);">
+        Entry for <strong>${escapeHtml(userName)}</strong> — ${formatDate(log.date)}
+      </p>
+      <div class="change-history-list">
+        ${historyHtml}
+      </div>
+      <div class="modal-actions" style="margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="hideChangeHistoryModal()">Close</button>
+      </div>
+    </div>
+  `;
+  
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      hideChangeHistoryModal();
+    }
+  });
+  
+  document.body.appendChild(modal);
+}
+
+// Hide change history modal
+function hideChangeHistoryModal() {
+  const modal = document.getElementById('changeHistoryModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
 // Export functions for global use
 window.showDeleteModal = showDeleteModal;
 window.showEditLogModal = showEditLogModal;
+window.showChangeHistoryModal = showChangeHistoryModal;
+window.hideChangeHistoryModal = hideChangeHistoryModal;
+window.approveEntry = approveEntry;

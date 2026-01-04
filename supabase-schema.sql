@@ -20,9 +20,21 @@ CREATE TABLE IF NOT EXISTS logs (
   comment TEXT,
   approved_by TEXT,
   edited_at TIMESTAMP WITH TIME ZONE,
+  change_history JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE
 );
+
+-- Добавить колонку change_history если таблица уже существует
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'logs' AND column_name = 'change_history'
+  ) THEN
+    ALTER TABLE logs ADD COLUMN change_history JSONB DEFAULT '[]'::jsonb;
+  END IF;
+END $$;
 
 -- Таблица настроек
 CREATE TABLE IF NOT EXISTS settings (

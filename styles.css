@@ -207,6 +207,82 @@
   color: var(--text-muted);
 }
 
+/* Change history modal styles */
+.change-history-modal .modal-content {
+  max-width: 550px;
+}
+
+.change-history-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.change-history-item {
+  padding: 12px;
+  background: var(--gray-50);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  border-left: 3px solid var(--warning);
+}
+
+[data-theme="dark"] .change-history-item {
+  background: var(--bg-input);
+}
+
+.change-history-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.change-history-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.change-history-field {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.change-history-field strong {
+  color: var(--text-primary);
+}
+
+.change-history-old {
+  color: var(--danger);
+  text-decoration: line-through;
+  margin-right: 8px;
+}
+
+.change-history-new {
+  color: var(--success);
+}
+
+.change-history-arrow {
+  margin: 0 6px;
+  color: var(--text-muted);
+}
+
+/* History badge for table */
+.history-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 6px;
+}
+
+.history-badge:hover {
+  background: rgba(245, 158, 11, 0.25);
+}
+
 [data-theme="dark"] .log-edit-btn:hover,
 [data-theme="dark"] .log-delete-btn:hover {
   background: var(--bg-input);
@@ -1626,8 +1702,13 @@ body {
 .search-input:focus {
   outline: none;
   border-color: var(--primary);
-  background: white;
+  background: var(--bg-card);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+[data-theme="dark"] .search-input:focus {
+  background: var(--bg-input);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
 .search-wrapper {
